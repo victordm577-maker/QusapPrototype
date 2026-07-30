@@ -449,7 +449,7 @@ GameObject:
   - component: {fileID: 1123179860}
   - component: {fileID: 1123179864}
   - component: {fileID: 1123179863}
-  - component: {fileID: 1123179862}
+  - component: {fileID: 1123179865}
   m_Layer: 0
   m_Name: QusapPrototype
   m_TagString: Untagged
@@ -608,19 +608,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapInputReader
   inputActionAsset: {fileID: -944628639613478452, guid: 03d81e0ac4a0d47489c3348878226ab3, type: 3}
---- !u!114 &1123179862
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1123179854}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3e6efd0a56c487d4eaed2dacb545c7c1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapGroundSensor
-  minimumGroundNormalY: 0.6
 --- !u!114 &1123179863
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -634,6 +621,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapJumpMotor
   jumpHeight: 2.5
+  timeToApex: 0.42
 --- !u!114 &1123179864
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -647,6 +635,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapGroundSensor
   minimumGroundNormalY: 0.6
+--- !u!114 &1123179865
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1123179854}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51d887846f6100d4cbeec3ffe42c60a1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapFallMotor
+  fallGravityMultiplier: 1.6
+  maximumFallSpeed: 18
 --- !u!1 &1707267994
 GameObject:
   m_ObjectHideFlags: 0

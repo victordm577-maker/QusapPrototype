@@ -1,0 +1,58 @@
+{
+    "version": 1,
+    "name": "QusapControls",
+    "maps": [
+        {
+            "name": "Gameplay",
+            "id": "f85a38cb-4620-4889-8ea0-c6658ab8dcc0",
+            "actions": [
+                {
+                    "name": "Move",
+                    "type": "Value",
+                    "id": "76b9752e-fd86-4016-b915-63c5403f2e4b",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true,
+                    "priority": 0
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "1D Axis",
+                    "id": "6cea476c-44b1-4cd8-9910-b3d36cb85087",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Move",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "negative",
+                    "id": "f66a28f9-bef0-4756-813a-edd47251bfcb",
+                    "path": "<Keyboard>/a",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Move",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "positive",
+                    "id": "47376df0-2b67-4619-a9e8-54aca576baee",
+                    "path": "<Keyboard>/d",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Move",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

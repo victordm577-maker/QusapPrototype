@@ -445,6 +445,8 @@ GameObject:
   - component: {fileID: 1123179857}
   - component: {fileID: 1123179856}
   - component: {fileID: 1123179855}
+  - component: {fileID: 1123179861}
+  - component: {fileID: 1123179860}
   m_Layer: 0
   m_Name: QusapPrototype
   m_TagString: Untagged
@@ -476,7 +478,7 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 1
   m_IsKinematic: 0
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_Constraints: 120
   m_CollisionDetection: 0
 --- !u!136 &1123179856
@@ -568,12 +570,41 @@ Transform:
   m_GameObject: {fileID: 1123179854}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 4, z: 0}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1123179860
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1123179854}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6aea794a5bd13524ba677af0b0906dc0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapHorizontalMotor
+  maxSpeed: 7
+  acceleration: 45
+  deceleration: 60
+  turnAcceleration: 75
+--- !u!114 &1123179861
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1123179854}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff433a0951bea2f4e8d317574e5cacf6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapInputReader
+  inputActionAsset: {fileID: -944628639613478452, guid: 03d81e0ac4a0d47489c3348878226ab3, type: 3}
 --- !u!1 &1707267994
 GameObject:
   m_ObjectHideFlags: 0

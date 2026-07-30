@@ -9,7 +9,9 @@ namespace Qusap
         [SerializeField] private InputActionAsset inputActionAsset;
 
         private InputAction moveAction;
+        private InputAction jumpAction;
         private float horizontalValue;
+        private bool jumpPressed;
 
         public float HorizontalValue => horizontalValue;
 
@@ -17,36 +19,50 @@ namespace Qusap
         {
             if (inputActionAsset == null)
             {
-                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move' action assigned.");
+                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move' and 'Gameplay/Jump' actions assigned.");
                 return;
             }
 
             moveAction = inputActionAsset.FindAction("Gameplay/Move");
+            jumpAction = inputActionAsset.FindAction("Gameplay/Jump");
 
             if (moveAction == null)
             {
                 Debug.LogError("QusapInputReader could not find the 'Gameplay/Move' action in the assigned InputActionAsset.");
             }
+
+            if (jumpAction == null)
+            {
+                Debug.LogError("QusapInputReader could not find the 'Gameplay/Jump' action in the assigned InputActionAsset.");
+            }
         }
 
         private void OnEnable()
         {
-            if (moveAction == null)
+            if (moveAction != null)
             {
-                return;
+                moveAction.Enable();
             }
 
-            moveAction.Enable();
+            if (jumpAction != null)
+            {
+                jumpAction.Enable();
+                jumpAction.performed += HandleJumpPerformed;
+            }
         }
 
         private void OnDisable()
         {
-            if (moveAction == null)
+            if (jumpAction != null)
             {
-                return;
+                jumpAction.performed -= HandleJumpPerformed;
+                jumpAction.Disable();
             }
 
-            moveAction.Disable();
+            if (moveAction != null)
+            {
+                moveAction.Disable();
+            }
         }
 
         private void Update()
@@ -57,6 +73,22 @@ namespace Qusap
             }
 
             horizontalValue = Mathf.Clamp(moveAction.ReadValue<float>(), -1f, 1f);
+        }
+
+        public bool ConsumeJumpPressed()
+        {
+            if (!jumpPressed)
+            {
+                return false;
+            }
+
+            jumpPressed = false;
+            return true;
+        }
+
+        private void HandleJumpPerformed(InputAction.CallbackContext context)
+        {
+            jumpPressed = true;
         }
     }
 }

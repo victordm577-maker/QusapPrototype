@@ -11,6 +11,7 @@ namespace Qusap
         [SerializeField] private float timeToApex = 0.42f;
         [SerializeField] private float fallGravityMultiplier = 1.6f;
         [SerializeField] private float maximumFallSpeed = 18f;
+        [SerializeField] private float jumpCutMultiplier = 0.5f;
 
         private Rigidbody rb;
         private QusapInputReader inputReader;
@@ -31,6 +32,7 @@ namespace Qusap
             timeToApex = Mathf.Max(timeToApex, 0.1f);
             fallGravityMultiplier = Mathf.Max(fallGravityMultiplier, 1f);
             maximumFallSpeed = Mathf.Max(maximumFallSpeed, 0.0001f);
+            jumpCutMultiplier = Mathf.Clamp(jumpCutMultiplier, 0.05f, 1f);
         }
 
         private void FixedUpdate()
@@ -41,6 +43,15 @@ namespace Qusap
             }
 
             Vector3 velocity = rb.linearVelocity;
+
+            if (inputReader.ConsumeJumpReleased() && velocity.y > 0f && !groundSensor.IsGrounded)
+            {
+                velocity.y *= jumpCutMultiplier;
+                velocity.z = 0f;
+                rb.linearVelocity = velocity;
+                isRising = false;
+                return;
+            }
 
             if (isRising)
             {

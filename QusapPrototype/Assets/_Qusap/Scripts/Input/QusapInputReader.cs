@@ -12,6 +12,7 @@ namespace Qusap
         private InputAction jumpAction;
         private float horizontalValue;
         private bool jumpPressed;
+        private bool jumpReleased;
 
         public float HorizontalValue => horizontalValue;
 
@@ -48,6 +49,7 @@ namespace Qusap
             {
                 jumpAction.Enable();
                 jumpAction.performed += HandleJumpPerformed;
+                jumpAction.canceled += HandleJumpCanceled;
             }
         }
 
@@ -56,6 +58,7 @@ namespace Qusap
             if (jumpAction != null)
             {
                 jumpAction.performed -= HandleJumpPerformed;
+                jumpAction.canceled -= HandleJumpCanceled;
                 jumpAction.Disable();
             }
 
@@ -86,9 +89,25 @@ namespace Qusap
             return true;
         }
 
+        public bool ConsumeJumpReleased()
+        {
+            if (!jumpReleased)
+            {
+                return false;
+            }
+
+            jumpReleased = false;
+            return true;
+        }
+
         private void HandleJumpPerformed(InputAction.CallbackContext context)
         {
             jumpPressed = true;
+        }
+
+        private void HandleJumpCanceled(InputAction.CallbackContext context)
+        {
+            jumpReleased = true;
         }
     }
 }

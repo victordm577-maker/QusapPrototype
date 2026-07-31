@@ -450,6 +450,7 @@ GameObject:
   - component: {fileID: 1123179864}
   - component: {fileID: 1123179863}
   - component: {fileID: 1123179865}
+  - component: {fileID: 1123179866}
   m_Layer: 0
   m_Name: QusapPrototype
   m_TagString: Untagged
@@ -615,7 +616,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1123179854}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 44731f6e9e150a545b4becabb87d70b5, type: 3}
   m_Name: 
@@ -642,11 +643,27 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1123179854}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 51d887846f6100d4cbeec3ffe42c60a1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapFallMotor
+  fallGravityMultiplier: 1.6
+  maximumFallSpeed: 18
+--- !u!114 &1123179866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1123179854}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a99cb69ff4527a4c97bd54f95446676, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapVerticalMotor
+  jumpHeight: 2.5
+  timeToApex: 0.42
   fallGravityMultiplier: 1.6
   maximumFallSpeed: 18
 --- !u!1 &1707267994

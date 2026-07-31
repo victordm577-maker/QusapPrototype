@@ -34,6 +34,7 @@ namespace Qusap
         private float riseGravity;
         private float coyoteTimeRemaining;
         private float jumpBufferRemaining;
+        private int lastWallJumpSide;
 
         private void Awake()
         {
@@ -69,9 +70,22 @@ namespace Qusap
             }
 
             Vector3 velocity = rb.linearVelocity;
+
+            if (groundSensor.IsGrounded)
+            {
+                lastWallJumpSide = 0;
+            }
+
+            bool isSameWallBlocked = lastWallJumpSide != 0
+                && wallSensor.IsTouchingWall
+                && wallSensor.WallSide == lastWallJumpSide;
             bool jumpPressed = inputReader.ConsumeJumpPressed();
 
-            if (jumpPressed)
+            if (isSameWallBlocked)
+            {
+                jumpBufferRemaining = 0f;
+            }
+            else if (jumpPressed)
             {
                 jumpBufferRemaining = jumpBufferTime;
             }
@@ -117,7 +131,8 @@ namespace Qusap
             bool canJump = jumpBufferRemaining > 0f && (groundSensor.IsGrounded || coyoteTimeRemaining > 0f);
             bool canWallJump = jumpBufferRemaining > 0f
                 && !groundSensor.IsGrounded
-                && wallSensor.IsTouchingWall;
+                && wallSensor.IsTouchingWall
+                && !isSameWallBlocked;
 
             if (!canJump && !canWallJump)
             {
@@ -147,6 +162,7 @@ namespace Qusap
 
             if (canWallJump && !canJump)
             {
+                int wallJumpSide = wallSensor.WallSide;
                 float horizontalInput = inputReader.HorizontalValue;
                 float wallJumpSpeed;
 
@@ -168,8 +184,10 @@ namespace Qusap
                 rb.linearVelocity = velocity;
 
                 horizontalMotor.ApplyWallJumpVelocity(
-                    -wallSensor.WallSide * wallJumpSpeed,
+                    -wallJumpSide * wallJumpSpeed,
                     wallJumpControlLockTime);
+
+                lastWallJumpSide = wallJumpSide;
 
                 jumpHeight = Mathf.Max(jumpHeight, 0.0001f);
                 timeToApex = Mathf.Max(timeToApex, 0.1f);

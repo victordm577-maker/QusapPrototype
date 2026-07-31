@@ -12,12 +12,14 @@ namespace Qusap
         [SerializeField] private float fallGravityMultiplier = 1.6f;
         [SerializeField] private float maximumFallSpeed = 18f;
         [SerializeField] private float jumpCutMultiplier = 0.5f;
+        [SerializeField] private float coyoteTime = 0.12f;
 
         private Rigidbody rb;
         private QusapInputReader inputReader;
         private QusapGroundSensor groundSensor;
         private bool isRising;
         private float riseGravity;
+        private float coyoteTimeRemaining;
 
         private void Awake()
         {
@@ -33,6 +35,7 @@ namespace Qusap
             fallGravityMultiplier = Mathf.Max(fallGravityMultiplier, 1f);
             maximumFallSpeed = Mathf.Max(maximumFallSpeed, 0.0001f);
             jumpCutMultiplier = Mathf.Clamp(jumpCutMultiplier, 0.05f, 1f);
+            coyoteTime = Mathf.Max(coyoteTime, 0f);
         }
 
         private void FixedUpdate()
@@ -43,6 +46,16 @@ namespace Qusap
             }
 
             Vector3 velocity = rb.linearVelocity;
+            bool jumpPressed = inputReader.ConsumeJumpPressed();
+
+            if (groundSensor.IsGrounded && velocity.y <= 0f)
+            {
+                coyoteTimeRemaining = coyoteTime;
+            }
+            else if (!groundSensor.IsGrounded)
+            {
+                coyoteTimeRemaining = Mathf.Max(coyoteTimeRemaining - Time.fixedDeltaTime, 0f);
+            }
 
             if (inputReader.ConsumeJumpReleased() && velocity.y > 0f && !groundSensor.IsGrounded)
             {
@@ -69,7 +82,7 @@ namespace Qusap
                 }
             }
 
-            if (!inputReader.ConsumeJumpPressed() || !groundSensor.IsGrounded)
+            if (!jumpPressed || coyoteTimeRemaining <= 0f)
             {
                 if (velocity.y < 0f)
                 {
@@ -83,6 +96,7 @@ namespace Qusap
                 return;
             }
 
+            coyoteTimeRemaining = 0f;
             timeToApex = Mathf.Max(timeToApex, 0.1f);
             jumpHeight = Mathf.Max(jumpHeight, 0.0001f);
 

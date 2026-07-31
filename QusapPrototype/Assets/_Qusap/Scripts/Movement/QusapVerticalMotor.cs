@@ -18,8 +18,12 @@ namespace Qusap
         [SerializeField] private float jumpBufferTime = 0.12f;
         [SerializeField] private float wallSlideMaximumFallSpeed = 3f;
         [SerializeField] private float wallJumpHorizontalSpeed = 9f;
+        [SerializeField] private float wallJumpNeutralHorizontalSpeed = 6f;
+        [SerializeField] private float wallJumpTowardWallHorizontalSpeed = 2.5f;
         [SerializeField] private float wallJumpVerticalSpeed = 9f;
         [SerializeField] private float wallJumpControlLockTime = 0.10f;
+
+        private const float WallJumpInputDeadZone = 0.1f;
 
         private Rigidbody rb;
         private QusapInputReader inputReader;
@@ -51,6 +55,8 @@ namespace Qusap
             jumpBufferTime = Mathf.Max(jumpBufferTime, 0f);
             wallSlideMaximumFallSpeed = Mathf.Max(wallSlideMaximumFallSpeed, 0f);
             wallJumpHorizontalSpeed = Mathf.Max(wallJumpHorizontalSpeed, 0f);
+            wallJumpNeutralHorizontalSpeed = Mathf.Max(wallJumpNeutralHorizontalSpeed, 0f);
+            wallJumpTowardWallHorizontalSpeed = Mathf.Max(wallJumpTowardWallHorizontalSpeed, 0f);
             wallJumpVerticalSpeed = Mathf.Max(wallJumpVerticalSpeed, 0f);
             wallJumpControlLockTime = Mathf.Max(wallJumpControlLockTime, 0f);
         }
@@ -141,12 +147,28 @@ namespace Qusap
 
             if (canWallJump && !canJump)
             {
+                float horizontalInput = inputReader.HorizontalValue;
+                float wallJumpSpeed;
+
+                if (Mathf.Abs(horizontalInput) <= WallJumpInputDeadZone)
+                {
+                    wallJumpSpeed = wallJumpNeutralHorizontalSpeed;
+                }
+                else if (horizontalInput * wallSensor.WallSide < 0f)
+                {
+                    wallJumpSpeed = wallJumpHorizontalSpeed;
+                }
+                else
+                {
+                    wallJumpSpeed = wallJumpTowardWallHorizontalSpeed;
+                }
+
                 velocity.y = wallJumpVerticalSpeed;
                 velocity.z = 0f;
                 rb.linearVelocity = velocity;
 
                 horizontalMotor.ApplyWallJumpVelocity(
-                    -wallSensor.WallSide * wallJumpHorizontalSpeed,
+                    -wallSensor.WallSide * wallJumpSpeed,
                     wallJumpControlLockTime);
 
                 jumpHeight = Mathf.Max(jumpHeight, 0.0001f);

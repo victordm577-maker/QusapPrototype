@@ -4,6 +4,8 @@ namespace Qusap
 {
     [RequireComponent(typeof(QusapInputReader))]
     [RequireComponent(typeof(QusapGroundSensor))]
+    [RequireComponent(typeof(QusapWallSensor))]
+    [RequireComponent(typeof(QusapHorizontalMotor))]
     [RequireComponent(typeof(Rigidbody))]
     public class QusapVerticalMotor : MonoBehaviour
     {
@@ -14,10 +16,16 @@ namespace Qusap
         [SerializeField] private float jumpCutMultiplier = 0.5f;
         [SerializeField] private float coyoteTime = 0.12f;
         [SerializeField] private float jumpBufferTime = 0.12f;
+        [SerializeField] private float wallSlideMaximumFallSpeed = 3f;
+        [SerializeField] private float wallJumpHorizontalSpeed = 9f;
+        [SerializeField] private float wallJumpVerticalSpeed = 9f;
+        [SerializeField] private float wallJumpControlLockTime = 0.10f;
 
         private Rigidbody rb;
         private QusapInputReader inputReader;
         private QusapGroundSensor groundSensor;
+        private QusapWallSensor wallSensor;
+        private QusapHorizontalMotor horizontalMotor;
         private bool isRising;
         private float riseGravity;
         private float coyoteTimeRemaining;
@@ -28,6 +36,8 @@ namespace Qusap
             rb = GetComponent<Rigidbody>();
             inputReader = GetComponent<QusapInputReader>();
             groundSensor = GetComponent<QusapGroundSensor>();
+            wallSensor = GetComponent<QusapWallSensor>();
+            horizontalMotor = GetComponent<QusapHorizontalMotor>();
         }
 
         private void OnValidate()
@@ -39,11 +49,15 @@ namespace Qusap
             jumpCutMultiplier = Mathf.Clamp(jumpCutMultiplier, 0.05f, 1f);
             coyoteTime = Mathf.Max(coyoteTime, 0f);
             jumpBufferTime = Mathf.Max(jumpBufferTime, 0f);
+            wallSlideMaximumFallSpeed = Mathf.Max(wallSlideMaximumFallSpeed, 0f);
+            wallJumpHorizontalSpeed = Mathf.Max(wallJumpHorizontalSpeed, 0f);
+            wallJumpVerticalSpeed = Mathf.Max(wallJumpVerticalSpeed, 0f);
+            wallJumpControlLockTime = Mathf.Max(wallJumpControlLockTime, 0f);
         }
 
         private void FixedUpdate()
         {
-            if (inputReader == null || groundSensor == null || rb == null)
+            if (inputReader == null || groundSensor == null || wallSensor == null || horizontalMotor == null || rb == null)
             {
                 return;
             }
@@ -95,14 +109,26 @@ namespace Qusap
             }
 
             bool canJump = jumpBufferRemaining > 0f && (groundSensor.IsGrounded || coyoteTimeRemaining > 0f);
+            bool canWallJump = jumpBufferRemaining > 0f
+                && !groundSensor.IsGrounded
+                && wallSensor.IsTouchingWall;
 
-            if (!canJump)
+            if (!canJump && !canWallJump)
             {
                 if (velocity.y < 0f)
                 {
                     float adjustedGravity = Physics.gravity.y * (Mathf.Max(fallGravityMultiplier, 1f) - 1f);
                     velocity.y += adjustedGravity * Time.fixedDeltaTime;
                     velocity.y = Mathf.Max(velocity.y, -maximumFallSpeed);
+
+                    bool isPushingTowardWall = wallSensor.IsTouchingWall
+                        && inputReader.HorizontalValue * wallSensor.WallSide > 0f;
+
+                    if (!groundSensor.IsGrounded && isPushingTowardWall)
+                    {
+                        velocity.y = Mathf.Max(velocity.y, -wallSlideMaximumFallSpeed);
+                    }
+
                     velocity.z = 0f;
                     rb.linearVelocity = velocity;
                 }
@@ -112,6 +138,24 @@ namespace Qusap
 
             jumpBufferRemaining = 0f;
             coyoteTimeRemaining = 0f;
+
+            if (canWallJump && !canJump)
+            {
+                velocity.y = wallJumpVerticalSpeed;
+                velocity.z = 0f;
+                rb.linearVelocity = velocity;
+
+                horizontalMotor.ApplyWallJumpVelocity(
+                    -wallSensor.WallSide * wallJumpHorizontalSpeed,
+                    wallJumpControlLockTime);
+
+                jumpHeight = Mathf.Max(jumpHeight, 0.0001f);
+                timeToApex = Mathf.Max(timeToApex, 0.1f);
+                riseGravity = (-2f * jumpHeight) / (timeToApex * timeToApex);
+                isRising = true;
+                return;
+            }
+
             timeToApex = Mathf.Max(timeToApex, 0.1f);
             jumpHeight = Mathf.Max(jumpHeight, 0.0001f);
 

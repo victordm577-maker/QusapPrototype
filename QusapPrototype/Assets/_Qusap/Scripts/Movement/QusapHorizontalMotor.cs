@@ -18,6 +18,7 @@ namespace Qusap
         private Rigidbody rb;
         private QusapInputReader inputReader;
         private QusapGroundSensor groundSensor;
+        private float wallJumpControlLockRemaining;
 
         private void Awake()
         {
@@ -45,6 +46,17 @@ namespace Qusap
             }
 
             Vector3 velocity = rb.linearVelocity;
+
+            if (wallJumpControlLockRemaining > 0f)
+            {
+                wallJumpControlLockRemaining = Mathf.Max(
+                    wallJumpControlLockRemaining - Time.fixedDeltaTime,
+                    0f);
+                velocity.z = 0f;
+                rb.linearVelocity = velocity;
+                return;
+            }
+
             float currentSpeed = velocity.x;
             float targetSpeed = inputReader.HorizontalValue * maxSpeed;
             bool isGrounded = groundSensor.IsGrounded && velocity.y <= 0f;
@@ -83,6 +95,21 @@ namespace Qusap
             velocity.x = desiredSpeed;
             velocity.z = 0f;
             rb.linearVelocity = velocity;
+        }
+
+        public void ApplyWallJumpVelocity(float horizontalVelocity, float controlLockDuration)
+        {
+            if (rb == null)
+            {
+                return;
+            }
+
+            Vector3 velocity = rb.linearVelocity;
+            velocity.x = horizontalVelocity;
+            velocity.z = 0f;
+            rb.linearVelocity = velocity;
+
+            wallJumpControlLockRemaining = Mathf.Max(controlLockDuration, 0f);
         }
     }
 }

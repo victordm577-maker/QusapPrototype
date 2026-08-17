@@ -1702,6 +1702,22 @@ PrefabInstance:
       propertyPath: m_CollisionDetection
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 8288862293721350687, guid: d70dc026717090b419921c8915247931, type: 3}
+      propertyPath: maxSpeed
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 8288862293721350687, guid: d70dc026717090b419921c8915247931, type: 3}
+      propertyPath: acceleration
+      value: 55
+      objectReference: {fileID: 0}
+    - target: {fileID: 8288862293721350687, guid: d70dc026717090b419921c8915247931, type: 3}
+      propertyPath: deceleration
+      value: 70
+      objectReference: {fileID: 0}
+    - target: {fileID: 8288862293721350687, guid: d70dc026717090b419921c8915247931, type: 3}
+      propertyPath: turnAcceleration
+      value: 95
+      objectReference: {fileID: 0}
     - target: {fileID: 9060141001820132437, guid: d70dc026717090b419921c8915247931, type: 3}
       propertyPath: m_LocalPosition.x
       value: 13

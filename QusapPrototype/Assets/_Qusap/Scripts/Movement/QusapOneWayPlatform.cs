@@ -9,15 +9,19 @@ namespace Qusap
         [SerializeField] private BoxCollider solidCollider;
         [SerializeField] private float enterTolerance = 0.08f;
         [SerializeField] private float exitTolerance = 0.12f;
+        [SerializeField] private float standingTolerance = 0.12f;
 
-        private readonly Dictionary<Rigidbody, TrackedCharacter> trackedCharacters = new();
+        private readonly Dictionary<Rigidbody, PlayerState> trackedPlayers = new();
         private BoxCollider detectionTrigger;
 
-        private sealed class TrackedCharacter
+        private sealed class PlayerState
         {
+            public Rigidbody Rigidbody;
             public CapsuleCollider CapsuleCollider;
-            public int OverlapCount;
-            public bool IsCollisionIgnored;
+            public QusapInputReader InputReader;
+            public bool CollisionIgnored;
+            public bool DroppingDown;
+            public bool InsideTrigger;
         }
 
         private void Awake()
@@ -64,6 +68,7 @@ namespace Qusap
         {
             enterTolerance = Mathf.Max(enterTolerance, 0f);
             exitTolerance = Mathf.Max(exitTolerance, enterTolerance);
+            standingTolerance = Mathf.Max(standingTolerance, 0f);
         }
 
         private void FixedUpdate()
@@ -74,59 +79,87 @@ namespace Qusap
             }
 
             float platformTop = solidCollider.bounds.max.y;
+            List<Rigidbody> playersToRemove = null;
 
-            foreach (TrackedCharacter character in trackedCharacters.Values)
+            foreach (KeyValuePair<Rigidbody, PlayerState> entry in trackedPlayers)
             {
-                if (character.CapsuleCollider == null)
+                PlayerState player = entry.Value;
+
+                if (player.Rigidbody == null || player.CapsuleCollider == null)
                 {
+                    SetCollisionIgnored(player, false);
+                    playersToRemove ??= new List<Rigidbody>();
+                    playersToRemove.Add(entry.Key);
                     continue;
                 }
 
-                float characterBottom = character.CapsuleCollider.bounds.min.y;
+                SyncCollisionIgnored(player);
 
-                if (!character.IsCollisionIgnored
-                    && characterBottom < platformTop - enterTolerance)
+                float playerBottom = player.CapsuleCollider.bounds.min.y;
+                float playerTop = player.CapsuleCollider.bounds.max.y;
+
+                if (player.DroppingDown)
                 {
-                    SetCollisionIgnored(character, true);
+                    SetCollisionIgnored(player, true);
+
+                    if (playerTop < platformTop - exitTolerance)
+                    {
+                        player.DroppingDown = false;
+                    }
                 }
-                else if (character.IsCollisionIgnored
-                    && characterBottom >= platformTop + exitTolerance)
+
+                if (!player.DroppingDown)
                 {
-                    SetCollisionIgnored(character, false);
+                    bool isStanding = Mathf.Abs(playerBottom - platformTop) <= standingTolerance
+                        && Mathf.Abs(player.Rigidbody.linearVelocity.y) <= 0.3f
+                        && !player.CollisionIgnored;
+
+                    if (isStanding
+                        && player.InputReader != null
+                        && player.InputReader.ConsumeDropPressed())
+                    {
+                        BeginDrop(player);
+                    }
+                    else if (!player.CollisionIgnored
+                        && playerBottom < platformTop - enterTolerance
+                        && player.Rigidbody.linearVelocity.y > 0f)
+                    {
+                        SetCollisionIgnored(player, true);
+                    }
+                    else if (player.CollisionIgnored
+                        && playerBottom >= platformTop + exitTolerance)
+                    {
+                        SetCollisionIgnored(player, false);
+                    }
                 }
+
+                if (!player.DroppingDown && !player.InsideTrigger)
+                {
+                    SetCollisionIgnored(player, false);
+                    playersToRemove ??= new List<Rigidbody>();
+                    playersToRemove.Add(entry.Key);
+                }
+            }
+
+            if (playersToRemove == null)
+            {
+                return;
+            }
+
+            foreach (Rigidbody characterBody in playersToRemove)
+            {
+                trackedPlayers.Remove(characterBody);
             }
         }
 
         private void OnTriggerEnter(Collider other)
         {
-            Rigidbody characterBody = other.attachedRigidbody;
+            RegisterOrRefreshPlayer(other);
+        }
 
-            if (characterBody == null)
-            {
-                return;
-            }
-
-            if (trackedCharacters.TryGetValue(characterBody, out TrackedCharacter character))
-            {
-                character.OverlapCount++;
-                return;
-            }
-
-            CapsuleCollider capsuleCollider = characterBody.GetComponent<CapsuleCollider>();
-
-            if (capsuleCollider == null)
-            {
-                return;
-            }
-
-            character = new TrackedCharacter
-            {
-                CapsuleCollider = capsuleCollider,
-                OverlapCount = 1
-            };
-
-            trackedCharacters.Add(characterBody, character);
-            UpdateCollisionStateImmediately(character);
+        private void OnTriggerStay(Collider other)
+        {
+            RegisterOrRefreshPlayer(other);
         }
 
         private void OnTriggerExit(Collider other)
@@ -134,20 +167,20 @@ namespace Qusap
             Rigidbody characterBody = other.attachedRigidbody;
 
             if (characterBody == null
-                || !trackedCharacters.TryGetValue(characterBody, out TrackedCharacter character))
+                || !trackedPlayers.TryGetValue(characterBody, out PlayerState player))
             {
                 return;
             }
 
-            character.OverlapCount--;
+            player.InsideTrigger = false;
 
-            if (character.OverlapCount > 0)
+            if (player.DroppingDown)
             {
                 return;
             }
 
-            SetCollisionIgnored(character, false);
-            trackedCharacters.Remove(characterBody);
+            SetCollisionIgnored(player, false);
+            trackedPlayers.Remove(characterBody);
         }
 
         private void OnDisable()
@@ -160,43 +193,95 @@ namespace Qusap
             RestoreAllCollisions();
         }
 
-        private void UpdateCollisionStateImmediately(TrackedCharacter character)
+        private void RegisterOrRefreshPlayer(Collider other)
         {
-            if (solidCollider == null || character.CapsuleCollider == null)
+            Rigidbody characterBody = other.attachedRigidbody;
+
+            if (characterBody == null)
             {
                 return;
             }
 
-            float platformTop = solidCollider.bounds.max.y;
-            float characterBottom = character.CapsuleCollider.bounds.min.y;
-
-            if (characterBottom < platformTop - enterTolerance)
+            if (trackedPlayers.TryGetValue(characterBody, out PlayerState player))
             {
-                SetCollisionIgnored(character, true);
+                player.InsideTrigger = true;
+                return;
+            }
+
+            CapsuleCollider capsuleCollider = characterBody.GetComponent<CapsuleCollider>();
+
+            if (capsuleCollider == null)
+            {
+                return;
+            }
+
+            player = new PlayerState
+            {
+                Rigidbody = characterBody,
+                CapsuleCollider = capsuleCollider,
+                InputReader = characterBody.GetComponent<QusapInputReader>(),
+                InsideTrigger = true
+            };
+
+            trackedPlayers.Add(characterBody, player);
+
+            float platformTop = solidCollider.bounds.max.y;
+            float playerBottom = capsuleCollider.bounds.min.y;
+
+            if (playerBottom < platformTop - enterTolerance
+                && characterBody.linearVelocity.y > 0f)
+            {
+                SetCollisionIgnored(player, true);
             }
         }
 
-        private void SetCollisionIgnored(TrackedCharacter character, bool shouldIgnore)
+        private void BeginDrop(PlayerState player)
         {
-            if (character.IsCollisionIgnored == shouldIgnore
-                || character.CapsuleCollider == null
-                || solidCollider == null)
+            player.DroppingDown = true;
+            SetCollisionIgnored(player, true);
+
+            Vector3 velocity = player.Rigidbody.linearVelocity;
+            velocity.y = Mathf.Min(velocity.y, -2f);
+            velocity.z = 0f;
+            player.Rigidbody.linearVelocity = velocity;
+            player.Rigidbody.WakeUp();
+        }
+
+        private void SetCollisionIgnored(PlayerState player, bool ignored)
+        {
+            if (player.CapsuleCollider == null || solidCollider == null)
             {
+                player.CollisionIgnored = false;
                 return;
             }
 
-            Physics.IgnoreCollision(character.CapsuleCollider, solidCollider, shouldIgnore);
-            character.IsCollisionIgnored = shouldIgnore;
+            Physics.IgnoreCollision(player.CapsuleCollider, solidCollider, ignored);
+            player.CollisionIgnored = Physics.GetIgnoreCollision(
+                player.CapsuleCollider,
+                solidCollider);
+        }
+
+        private void SyncCollisionIgnored(PlayerState player)
+        {
+            if (player.CapsuleCollider == null || solidCollider == null)
+            {
+                player.CollisionIgnored = false;
+                return;
+            }
+
+            player.CollisionIgnored = Physics.GetIgnoreCollision(
+                player.CapsuleCollider,
+                solidCollider);
         }
 
         private void RestoreAllCollisions()
         {
-            foreach (TrackedCharacter character in trackedCharacters.Values)
+            foreach (PlayerState player in trackedPlayers.Values)
             {
-                SetCollisionIgnored(character, false);
+                SetCollisionIgnored(player, false);
             }
 
-            trackedCharacters.Clear();
+            trackedPlayers.Clear();
         }
     }
 }

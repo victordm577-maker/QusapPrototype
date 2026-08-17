@@ -10,9 +10,11 @@ namespace Qusap
 
         private InputAction moveAction;
         private InputAction jumpAction;
+        private InputAction dropAction;
         private float horizontalValue;
         private bool jumpPressed;
         private bool jumpReleased;
+        private bool dropPressed;
 
         public float HorizontalValue => horizontalValue;
 
@@ -20,12 +22,13 @@ namespace Qusap
         {
             if (inputActionAsset == null)
             {
-                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move' and 'Gameplay/Jump' actions assigned.");
+                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move', 'Gameplay/Jump', and 'Gameplay/Drop' actions assigned.");
                 return;
             }
 
             moveAction = inputActionAsset.FindAction("Gameplay/Move");
             jumpAction = inputActionAsset.FindAction("Gameplay/Jump");
+            dropAction = inputActionAsset.FindAction("Gameplay/Drop");
 
             if (moveAction == null)
             {
@@ -35,6 +38,11 @@ namespace Qusap
             if (jumpAction == null)
             {
                 Debug.LogError("QusapInputReader could not find the 'Gameplay/Jump' action in the assigned InputActionAsset.");
+            }
+
+            if (dropAction == null)
+            {
+                Debug.LogError("QusapInputReader could not find the 'Gameplay/Drop' action in the assigned InputActionAsset.");
             }
         }
 
@@ -51,10 +59,22 @@ namespace Qusap
                 jumpAction.performed += HandleJumpPerformed;
                 jumpAction.canceled += HandleJumpCanceled;
             }
+
+            if (dropAction != null)
+            {
+                dropAction.Enable();
+                dropAction.performed += HandleDropPerformed;
+            }
         }
 
         private void OnDisable()
         {
+            if (dropAction != null)
+            {
+                dropAction.performed -= HandleDropPerformed;
+                dropAction.Disable();
+            }
+
             if (jumpAction != null)
             {
                 jumpAction.performed -= HandleJumpPerformed;
@@ -100,6 +120,17 @@ namespace Qusap
             return true;
         }
 
+        public bool ConsumeDropPressed()
+        {
+            if (!dropPressed)
+            {
+                return false;
+            }
+
+            dropPressed = false;
+            return true;
+        }
+
         private void HandleJumpPerformed(InputAction.CallbackContext context)
         {
             jumpPressed = true;
@@ -108,6 +139,11 @@ namespace Qusap
         private void HandleJumpCanceled(InputAction.CallbackContext context)
         {
             jumpReleased = true;
+        }
+
+        private void HandleDropPerformed(InputAction.CallbackContext context)
+        {
+            dropPressed = true;
         }
     }
 }

@@ -80,6 +80,7 @@ namespace Qusap
                 && wallSensor.IsTouchingWall
                 && wallSensor.WallSide == lastWallJumpSide;
             bool jumpPressed = inputReader.ConsumeJumpPressed();
+            bool pendingJumpCut = inputReader.ConsumeJumpReleased();
 
             if (isSameWallBlocked)
             {
@@ -103,12 +104,19 @@ namespace Qusap
                 coyoteTimeRemaining = Mathf.Max(coyoteTimeRemaining - Time.fixedDeltaTime, 0f);
             }
 
-            if (inputReader.ConsumeJumpReleased() && velocity.y > 0f && !groundSensor.IsGrounded)
+            bool canJump = jumpBufferRemaining > 0f && (groundSensor.IsGrounded || coyoteTimeRemaining > 0f);
+            bool canWallJump = jumpBufferRemaining > 0f
+                && !groundSensor.IsGrounded
+                && wallSensor.IsTouchingWall
+                && !isSameWallBlocked;
+            bool isStartingJump = canJump || canWallJump;
+
+            if (pendingJumpCut && !isStartingJump && velocity.y > 0f && !groundSensor.IsGrounded)
             {
                 velocity.y *= jumpCutMultiplier;
                 velocity.z = 0f;
                 rb.linearVelocity = velocity;
-                isRising = false;
+                isRising = velocity.y > 0f;
                 return;
             }
 
@@ -127,12 +135,6 @@ namespace Qusap
                     return;
                 }
             }
-
-            bool canJump = jumpBufferRemaining > 0f && (groundSensor.IsGrounded || coyoteTimeRemaining > 0f);
-            bool canWallJump = jumpBufferRemaining > 0f
-                && !groundSensor.IsGrounded
-                && wallSensor.IsTouchingWall
-                && !isSameWallBlocked;
 
             if (!canJump && !canWallJump)
             {
@@ -180,6 +182,11 @@ namespace Qusap
                 }
 
                 velocity.y = wallJumpVerticalSpeed;
+                if (pendingJumpCut && velocity.y > 0f)
+                {
+                    velocity.y *= jumpCutMultiplier;
+                }
+
                 velocity.z = 0f;
                 rb.linearVelocity = velocity;
 
@@ -192,7 +199,7 @@ namespace Qusap
                 jumpHeight = Mathf.Max(jumpHeight, 0.0001f);
                 timeToApex = Mathf.Max(timeToApex, 0.1f);
                 riseGravity = (-2f * jumpHeight) / (timeToApex * timeToApex);
-                isRising = true;
+                isRising = velocity.y > 0f;
                 return;
             }
 
@@ -203,10 +210,15 @@ namespace Qusap
             riseGravity = (-2f * jumpHeight) / (timeToApex * timeToApex);
 
             velocity.y = jumpVelocity;
+            if (pendingJumpCut && velocity.y > 0f)
+            {
+                velocity.y *= jumpCutMultiplier;
+            }
+
             velocity.z = 0f;
             rb.linearVelocity = velocity;
 
-            isRising = true;
+            isRising = velocity.y > 0f;
         }
     }
 }

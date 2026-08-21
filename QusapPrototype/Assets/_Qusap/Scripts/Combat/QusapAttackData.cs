@@ -30,6 +30,7 @@ namespace Qusap
         [SerializeField] private float hitboxDepth = 1f;
         [SerializeField] private float horizontalKnockback = 4f;
         [SerializeField] private float verticalKnockback = 1f;
+        [SerializeField] private float hitstunDuration = 0.12f;
         [SerializeField] private bool lockHorizontalMovement;
 
         public QusapAttackType AttackType => attackType;
@@ -41,6 +42,7 @@ namespace Qusap
         public float HitboxDepth => hitboxDepth;
         public float HorizontalKnockback => horizontalKnockback;
         public float VerticalKnockback => verticalKnockback;
+        public float HitstunDuration => hitstunDuration;
         public bool LockHorizontalMovement => lockHorizontalMovement;
 
         public static QusapAttackData CreateWeakKick()
@@ -56,6 +58,7 @@ namespace Qusap
                 hitboxDepth = 1f,
                 horizontalKnockback = 4f,
                 verticalKnockback = 1f,
+                hitstunDuration = 0.12f,
                 lockHorizontalMovement = false
             };
         }
@@ -73,6 +76,7 @@ namespace Qusap
                 hitboxDepth = 1f,
                 horizontalKnockback = 7f,
                 verticalKnockback = 3f,
+                hitstunDuration = 0.24f,
                 lockHorizontalMovement = true
             };
         }
@@ -90,6 +94,7 @@ namespace Qusap
                 hitboxDepth = 1f,
                 horizontalKnockback = 9f,
                 verticalKnockback = 4f,
+                hitstunDuration = 0.4f,
                 lockHorizontalMovement = true
             };
         }
@@ -109,6 +114,7 @@ namespace Qusap
             hitboxDepth = Mathf.Max(hitboxDepth, 0.01f);
             horizontalKnockback = Mathf.Max(horizontalKnockback, 0f);
             verticalKnockback = Mathf.Max(verticalKnockback, 0f);
+            hitstunDuration = Mathf.Max(hitstunDuration, 0f);
         }
     }
 
@@ -120,6 +126,7 @@ namespace Qusap
             int horizontalDirection,
             float horizontalKnockback,
             float verticalKnockback,
+            float hitstunDuration,
             Vector3 hitboxCenter)
         {
             Source = source;
@@ -127,6 +134,7 @@ namespace Qusap
             HorizontalDirection = horizontalDirection;
             HorizontalKnockback = horizontalKnockback;
             VerticalKnockback = verticalKnockback;
+            HitstunDuration = hitstunDuration;
             HitboxCenter = hitboxCenter;
         }
 
@@ -135,6 +143,7 @@ namespace Qusap
         public int HorizontalDirection { get; }
         public float HorizontalKnockback { get; }
         public float VerticalKnockback { get; }
+        public float HitstunDuration { get; }
         public Vector3 HitboxCenter { get; }
     }
 }

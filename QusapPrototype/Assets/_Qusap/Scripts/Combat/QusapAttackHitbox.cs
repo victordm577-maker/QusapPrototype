@@ -86,6 +86,7 @@ namespace Qusap
                     attackDirection,
                     currentAttack.HorizontalKnockback,
                     currentAttack.VerticalKnockback,
+                    currentAttack.HitstunDuration,
                     center);
 
                 if (!receiver.TryReceiveHit(hitInfo))

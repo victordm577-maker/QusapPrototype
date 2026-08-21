@@ -3,11 +3,18 @@ using UnityEngine.InputSystem;
 
 namespace Qusap
 {
-    [RequireComponent(typeof(QusapInputReader))]
+    public enum QusapLocalPlayerSlot
+    {
+        Player1Keyboard,
+        Player2Gamepad
+    }
+
     public class QusapInputReader : MonoBehaviour
     {
         [SerializeField] private InputActionAsset inputActionAsset;
+        [SerializeField] private QusapLocalPlayerSlot localPlayerSlot = QusapLocalPlayerSlot.Player1Keyboard;
 
+        private InputActionAsset runtimeActionAsset;
         private InputAction moveAction;
         private InputAction jumpAction;
         private InputAction dropAction;
@@ -23,24 +30,32 @@ namespace Qusap
         private bool weakKickPressed;
         private bool strongKickPressed;
         private bool headbuttPressed;
+        private bool gameplayInputBlocked;
 
-        public float HorizontalValue => horizontalValue;
+        public float HorizontalValue => gameplayInputBlocked ? 0f : horizontalValue;
+        public QusapLocalPlayerSlot LocalPlayerSlot => localPlayerSlot;
 
         private void Awake()
         {
             if (inputActionAsset == null)
             {
                 Debug.LogError("QusapInputReader requires the configured Gameplay actions in its InputActionAsset.");
+                enabled = false;
                 return;
             }
 
-            moveAction = inputActionAsset.FindAction("Gameplay/Move");
-            jumpAction = inputActionAsset.FindAction("Gameplay/Jump");
-            dropAction = inputActionAsset.FindAction("Gameplay/Drop");
-            dashAction = inputActionAsset.FindAction("Gameplay/Dash");
-            weakKickAction = inputActionAsset.FindAction("Gameplay/WeakKick");
-            strongKickAction = inputActionAsset.FindAction("Gameplay/StrongKick");
-            headbuttAction = inputActionAsset.FindAction("Gameplay/Headbutt");
+            runtimeActionAsset = Instantiate(inputActionAsset);
+            runtimeActionAsset.name = $"{inputActionAsset.name}_{localPlayerSlot}_{GetEntityId()}";
+            runtimeActionAsset.hideFlags = HideFlags.HideAndDontSave;
+            ConfigureRuntimeInput();
+
+            moveAction = runtimeActionAsset.FindAction("Gameplay/Move");
+            jumpAction = runtimeActionAsset.FindAction("Gameplay/Jump");
+            dropAction = runtimeActionAsset.FindAction("Gameplay/Drop");
+            dashAction = runtimeActionAsset.FindAction("Gameplay/Dash");
+            weakKickAction = runtimeActionAsset.FindAction("Gameplay/WeakKick");
+            strongKickAction = runtimeActionAsset.FindAction("Gameplay/StrongKick");
+            headbuttAction = runtimeActionAsset.FindAction("Gameplay/Headbutt");
 
             if (moveAction == null)
             {
@@ -166,6 +181,20 @@ namespace Qusap
             {
                 moveAction.Disable();
             }
+
+            ClearBufferedActions();
+            horizontalValue = 0f;
+        }
+
+        private void OnDestroy()
+        {
+            if (runtimeActionAsset == null)
+            {
+                return;
+            }
+
+            runtimeActionAsset.Disable();
+            Destroy(runtimeActionAsset);
         }
 
         private void Update()
@@ -180,79 +209,96 @@ namespace Qusap
 
         public bool ConsumeJumpPressed()
         {
-            if (!jumpPressed)
-            {
-                return false;
-            }
-
-            jumpPressed = false;
-            return true;
+            return ConsumeBufferedAction(ref jumpPressed);
         }
 
         public bool ConsumeJumpReleased()
         {
-            if (!jumpReleased)
-            {
-                return false;
-            }
-
-            jumpReleased = false;
-            return true;
+            return ConsumeBufferedAction(ref jumpReleased);
         }
 
         public bool ConsumeDropPressed()
         {
-            if (!dropPressed)
-            {
-                return false;
-            }
-
-            dropPressed = false;
-            return true;
+            return ConsumeBufferedAction(ref dropPressed);
         }
 
         public bool ConsumeDashPressed()
         {
-            if (!dashPressed)
-            {
-                return false;
-            }
-
-            dashPressed = false;
-            return true;
+            return ConsumeBufferedAction(ref dashPressed);
         }
 
         public bool ConsumeWeakKickPressed()
         {
-            if (!weakKickPressed)
-            {
-                return false;
-            }
-
-            weakKickPressed = false;
-            return true;
+            return ConsumeBufferedAction(ref weakKickPressed);
         }
 
         public bool ConsumeStrongKickPressed()
         {
-            if (!strongKickPressed)
-            {
-                return false;
-            }
-
-            strongKickPressed = false;
-            return true;
+            return ConsumeBufferedAction(ref strongKickPressed);
         }
 
         public bool ConsumeHeadbuttPressed()
         {
-            if (!headbuttPressed)
+            return ConsumeBufferedAction(ref headbuttPressed);
+        }
+
+        public void SetLocalPlayerSlot(QusapLocalPlayerSlot slot)
+        {
+            if (Application.isPlaying && runtimeActionAsset != null)
             {
-                return false;
+                Debug.LogWarning("The local player slot cannot be changed after QusapInputReader has initialized.", this);
+                return;
             }
 
+            localPlayerSlot = slot;
+        }
+
+        public void SetGameplayInputBlocked(bool blocked)
+        {
+            gameplayInputBlocked = blocked;
+            horizontalValue = blocked ? 0f : horizontalValue;
+            ClearBufferedActions();
+        }
+
+        public void ClearBufferedActions()
+        {
+            jumpPressed = false;
+            jumpReleased = false;
+            dropPressed = false;
+            dashPressed = false;
+            weakKickPressed = false;
+            strongKickPressed = false;
             headbuttPressed = false;
-            return true;
+        }
+
+        private void ConfigureRuntimeInput()
+        {
+            bool isPlayerOne = localPlayerSlot == QusapLocalPlayerSlot.Player1Keyboard;
+            string bindingGroup = isPlayerOne ? "Player1" : "Player2";
+            InputDevice device = isPlayerOne ? Keyboard.current : GetFirstGamepad();
+
+            runtimeActionAsset.bindingMask = InputBinding.MaskByGroup(bindingGroup);
+            runtimeActionAsset.devices = device != null
+                ? new[] { device }
+                : new InputDevice[0];
+
+            if (device == null)
+            {
+                string expectedDevice = isPlayerOne ? "keyboard" : "gamepad";
+                Debug.LogWarning($"{name} has no {expectedDevice} available for {localPlayerSlot}. It will remain unpaired.", this);
+            }
+        }
+
+        private static Gamepad GetFirstGamepad()
+        {
+            return Gamepad.all.Count > 0 ? Gamepad.all[0] : null;
+        }
+
+        private bool ConsumeBufferedAction(ref bool bufferedAction)
+        {
+            bool wasBuffered = bufferedAction;
+            bufferedAction = false;
+            return wasBuffered && !gameplayInputBlocked;
         }
 
         private void HandleJumpPerformed(InputAction.CallbackContext context)

@@ -23,6 +23,7 @@ GameObject:
   - component: {fileID: 6742095518431103811}
   - component: {fileID: 6742095518431103812}
   - component: {fileID: 6742095518431103813}
+  - component: {fileID: 6742095518431103814}
   m_Layer: 0
   m_Name: QusapPrototype
   m_TagString: Untagged
@@ -166,6 +167,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapInputReader
   inputActionAsset: {fileID: -944628639613478452, guid: 03d81e0ac4a0d47489c3348878226ab3, type: 3}
+  localPlayerSlot: 0
 --- !u!114 &8288862293721350687
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -280,6 +282,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapCombatController
   combatAllowed: 1
   facingInputThreshold: 0.05
+  initialFacingDirection: 1
   attackHitbox: {fileID: 6742095518431103822}
   weakKick:
     attackType: 0
@@ -291,6 +294,7 @@ MonoBehaviour:
     hitboxDepth: 1
     horizontalKnockback: 4
     verticalKnockback: 1
+    hitstunDuration: 0.12
     lockHorizontalMovement: 0
   strongKick:
     attackType: 1
@@ -302,6 +306,7 @@ MonoBehaviour:
     hitboxDepth: 1
     horizontalKnockback: 7
     verticalKnockback: 3
+    hitstunDuration: 0.24
     lockHorizontalMovement: 1
   headbutt:
     attackType: 2
@@ -313,6 +318,7 @@ MonoBehaviour:
     hitboxDepth: 1
     horizontalKnockback: 9
     verticalKnockback: 4
+    hitstunDuration: 0.4
     lockHorizontalMovement: 1
 --- !u!114 &6742095518431103812
 MonoBehaviour:
@@ -342,6 +348,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapHurtbox
   gizmoColor: {r: 0.1, g: 0.8, b: 1, a: 0.85}
   hurtboxCollider: {fileID: 3644280061552033297}
+--- !u!114 &6742095518431103814
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 799306080639723928}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d671e845c47b4c49a265205b6fbfb2af, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapHitstunController
 --- !u!1 &6742095518431103820
 GameObject:
   m_ObjectHideFlags: 0

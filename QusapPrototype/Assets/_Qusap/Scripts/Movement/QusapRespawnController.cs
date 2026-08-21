@@ -11,6 +11,7 @@ namespace Qusap
 
         private Rigidbody rb;
         private QusapDashMotor dashMotor;
+        private QusapHitstunController hitstunController;
         private Vector3 initialPosition;
         private Quaternion initialRotation;
 
@@ -18,6 +19,7 @@ namespace Qusap
         {
             rb = GetComponent<Rigidbody>();
             dashMotor = GetComponent<QusapDashMotor>();
+            hitstunController = GetComponent<QusapHitstunController>();
             initialPosition = rb.position;
             initialRotation = rb.rotation;
         }
@@ -32,6 +34,7 @@ namespace Qusap
 
         public void Respawn()
         {
+            hitstunController?.ResetHitstun();
             dashMotor?.ResetDashState();
 
             Vector3 respawnPosition = optionalRespawnPoint != null

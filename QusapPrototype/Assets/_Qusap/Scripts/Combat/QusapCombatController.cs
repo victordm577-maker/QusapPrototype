@@ -9,10 +9,12 @@ namespace Qusap
     [RequireComponent(typeof(QusapInputReader))]
     [RequireComponent(typeof(QusapDashMotor))]
     [RequireComponent(typeof(QusapHitReceiver))]
+    [RequireComponent(typeof(QusapHitstunController))]
     public sealed class QusapCombatController : MonoBehaviour
     {
         [SerializeField] private bool combatAllowed = true;
         [SerializeField] private float facingInputThreshold = 0.05f;
+        [SerializeField, Range(-1, 1)] private int initialFacingDirection = 1;
         [SerializeField] private QusapAttackHitbox attackHitbox;
         [SerializeField] private QusapAttackData weakKick = QusapAttackData.CreateWeakKick();
         [SerializeField] private QusapAttackData strongKick = QusapAttackData.CreateStrongKick();
@@ -21,6 +23,7 @@ namespace Qusap
         private Rigidbody rb;
         private QusapInputReader inputReader;
         private QusapDashMotor dashMotor;
+        private QusapHitstunController hitstunController;
         private QusapAttackData currentAttack;
         private float phaseTimeRemaining;
         private int attackDirection = 1;
@@ -57,7 +60,9 @@ namespace Qusap
             rb = GetComponent<Rigidbody>();
             inputReader = GetComponent<QusapInputReader>();
             dashMotor = GetComponent<QusapDashMotor>();
+            hitstunController = GetComponent<QusapHitstunController>();
             HitReceiver = GetComponent<QusapHitReceiver>();
+            FacingDirection = initialFacingDirection < 0 ? -1 : 1;
 
             if (attackHitbox == null)
             {
@@ -79,6 +84,7 @@ namespace Qusap
         private void OnValidate()
         {
             facingInputThreshold = Mathf.Max(facingInputThreshold, 0f);
+            initialFacingDirection = initialFacingDirection < 0 ? -1 : 1;
             ValidateAttackData();
         }
 
@@ -94,6 +100,11 @@ namespace Qusap
             bool weakKickPressed = inputReader.ConsumeWeakKickPressed();
             bool strongKickPressed = inputReader.ConsumeStrongKickPressed();
             bool headbuttPressed = inputReader.ConsumeHeadbuttPressed();
+
+            if (hitstunController != null && hitstunController.IsInHitstun)
+            {
+                return;
+            }
 
             if (!IsAttacking)
             {
@@ -122,6 +133,7 @@ namespace Qusap
         {
             if (!combatAllowed
                 || IsAttacking
+                || (hitstunController != null && hitstunController.IsInHitstun)
                 || dashMotor == null
                 || dashMotor.IsDashing)
             {
@@ -157,6 +169,11 @@ namespace Qusap
                 QusapAttackType.Headbutt => headbutt,
                 _ => null
             };
+        }
+
+        public void CancelAttack()
+        {
+            CancelCurrentAttack(true);
         }
 
         internal void NotifyAttackHit(QusapHitReceiver receiver)

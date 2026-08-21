@@ -12,6 +12,7 @@ namespace Qusap
 
         private Rigidbody rb;
         private QusapCombatController combatController;
+        private QusapHitstunController hitstunController;
 
         public event Action<QusapHitInfo> HitReceived;
 
@@ -25,6 +26,7 @@ namespace Qusap
         {
             rb = GetComponent<Rigidbody>();
             combatController = GetComponent<QusapCombatController>();
+            hitstunController = GetComponent<QusapHitstunController>();
         }
 
         private void OnValidate()
@@ -52,6 +54,8 @@ namespace Qusap
             velocity.z = 0f;
             rb.linearVelocity = velocity;
             rb.WakeUp();
+
+            hitstunController?.EnterHitstun(hitInfo.HitstunDuration);
 
             HitReceived?.Invoke(hitInfo);
             return true;

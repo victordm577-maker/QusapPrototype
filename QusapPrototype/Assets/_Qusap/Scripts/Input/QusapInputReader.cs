@@ -12,11 +12,17 @@ namespace Qusap
         private InputAction jumpAction;
         private InputAction dropAction;
         private InputAction dashAction;
+        private InputAction weakKickAction;
+        private InputAction strongKickAction;
+        private InputAction headbuttAction;
         private float horizontalValue;
         private bool jumpPressed;
         private bool jumpReleased;
         private bool dropPressed;
         private bool dashPressed;
+        private bool weakKickPressed;
+        private bool strongKickPressed;
+        private bool headbuttPressed;
 
         public float HorizontalValue => horizontalValue;
 
@@ -24,7 +30,7 @@ namespace Qusap
         {
             if (inputActionAsset == null)
             {
-                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move', 'Gameplay/Jump', 'Gameplay/Drop', and 'Gameplay/Dash' actions assigned.");
+                Debug.LogError("QusapInputReader requires the configured Gameplay actions in its InputActionAsset.");
                 return;
             }
 
@@ -32,6 +38,9 @@ namespace Qusap
             jumpAction = inputActionAsset.FindAction("Gameplay/Jump");
             dropAction = inputActionAsset.FindAction("Gameplay/Drop");
             dashAction = inputActionAsset.FindAction("Gameplay/Dash");
+            weakKickAction = inputActionAsset.FindAction("Gameplay/WeakKick");
+            strongKickAction = inputActionAsset.FindAction("Gameplay/StrongKick");
+            headbuttAction = inputActionAsset.FindAction("Gameplay/Headbutt");
 
             if (moveAction == null)
             {
@@ -51,6 +60,21 @@ namespace Qusap
             if (dashAction == null)
             {
                 Debug.LogError("QusapInputReader could not find the 'Gameplay/Dash' action in the assigned InputActionAsset.");
+            }
+
+            if (weakKickAction == null)
+            {
+                Debug.LogError("QusapInputReader could not find the 'Gameplay/WeakKick' action in the assigned InputActionAsset.");
+            }
+
+            if (strongKickAction == null)
+            {
+                Debug.LogError("QusapInputReader could not find the 'Gameplay/StrongKick' action in the assigned InputActionAsset.");
+            }
+
+            if (headbuttAction == null)
+            {
+                Debug.LogError("QusapInputReader could not find the 'Gameplay/Headbutt' action in the assigned InputActionAsset.");
             }
         }
 
@@ -79,10 +103,46 @@ namespace Qusap
                 dashAction.Enable();
                 dashAction.performed += HandleDashPerformed;
             }
+
+            if (weakKickAction != null)
+            {
+                weakKickAction.Enable();
+                weakKickAction.performed += HandleWeakKickPerformed;
+            }
+
+            if (strongKickAction != null)
+            {
+                strongKickAction.Enable();
+                strongKickAction.performed += HandleStrongKickPerformed;
+            }
+
+            if (headbuttAction != null)
+            {
+                headbuttAction.Enable();
+                headbuttAction.performed += HandleHeadbuttPerformed;
+            }
         }
 
         private void OnDisable()
         {
+            if (headbuttAction != null)
+            {
+                headbuttAction.performed -= HandleHeadbuttPerformed;
+                headbuttAction.Disable();
+            }
+
+            if (strongKickAction != null)
+            {
+                strongKickAction.performed -= HandleStrongKickPerformed;
+                strongKickAction.Disable();
+            }
+
+            if (weakKickAction != null)
+            {
+                weakKickAction.performed -= HandleWeakKickPerformed;
+                weakKickAction.Disable();
+            }
+
             if (dashAction != null)
             {
                 dashAction.performed -= HandleDashPerformed;
@@ -162,6 +222,39 @@ namespace Qusap
             return true;
         }
 
+        public bool ConsumeWeakKickPressed()
+        {
+            if (!weakKickPressed)
+            {
+                return false;
+            }
+
+            weakKickPressed = false;
+            return true;
+        }
+
+        public bool ConsumeStrongKickPressed()
+        {
+            if (!strongKickPressed)
+            {
+                return false;
+            }
+
+            strongKickPressed = false;
+            return true;
+        }
+
+        public bool ConsumeHeadbuttPressed()
+        {
+            if (!headbuttPressed)
+            {
+                return false;
+            }
+
+            headbuttPressed = false;
+            return true;
+        }
+
         private void HandleJumpPerformed(InputAction.CallbackContext context)
         {
             jumpPressed = true;
@@ -180,6 +273,21 @@ namespace Qusap
         private void HandleDashPerformed(InputAction.CallbackContext context)
         {
             dashPressed = true;
+        }
+
+        private void HandleWeakKickPerformed(InputAction.CallbackContext context)
+        {
+            weakKickPressed = true;
+        }
+
+        private void HandleStrongKickPerformed(InputAction.CallbackContext context)
+        {
+            strongKickPressed = true;
+        }
+
+        private void HandleHeadbuttPerformed(InputAction.CallbackContext context)
+        {
+            headbuttPressed = true;
         }
     }
 }

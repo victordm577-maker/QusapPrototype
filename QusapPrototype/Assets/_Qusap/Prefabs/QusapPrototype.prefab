@@ -20,6 +20,9 @@ GameObject:
   - component: {fileID: 1137958490754154248}
   - component: {fileID: 1978956769118755134}
   - component: {fileID: 3229940206450296814}
+  - component: {fileID: 6742095518431103811}
+  - component: {fileID: 6742095518431103812}
+  - component: {fileID: 6742095518431103813}
   m_Layer: 0
   m_Name: QusapPrototype
   m_TagString: Untagged
@@ -39,7 +42,8 @@ Transform:
   m_LocalPosition: {x: -8, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 6742095518431103821}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &4212268500534501085
@@ -262,3 +266,127 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapRespawnController
   fallLimitY: -8
   optionalRespawnPoint: {fileID: 0}
+--- !u!114 &6742095518431103811
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 799306080639723928}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9eaf2512ca844f2a8ee2a29d179b56a7, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapCombatController
+  combatAllowed: 1
+  facingInputThreshold: 0.05
+  attackHitbox: {fileID: 6742095518431103822}
+  weakKick:
+    attackType: 0
+    startupTime: 0.08
+    activeDuration: 0.08
+    recoveryTime: 0.14
+    hitboxSize: {x: 1, y: 0.6}
+    hitboxOffset: {x: 0.75, y: -0.35}
+    hitboxDepth: 1
+    horizontalKnockback: 4
+    verticalKnockback: 1
+    lockHorizontalMovement: 0
+  strongKick:
+    attackType: 1
+    startupTime: 0.18
+    activeDuration: 0.1
+    recoveryTime: 0.32
+    hitboxSize: {x: 1.35, y: 0.75}
+    hitboxOffset: {x: 0.9, y: -0.25}
+    hitboxDepth: 1
+    horizontalKnockback: 7
+    verticalKnockback: 3
+    lockHorizontalMovement: 1
+  headbutt:
+    attackType: 2
+    startupTime: 0.14
+    activeDuration: 0.1
+    recoveryTime: 0.28
+    hitboxSize: {x: 1.2, y: 0.8}
+    hitboxOffset: {x: 0.8, y: 0.45}
+    hitboxDepth: 1
+    horizontalKnockback: 9
+    verticalKnockback: 4
+    lockHorizontalMovement: 1
+--- !u!114 &6742095518431103812
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 799306080639723928}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df79fffa3cb34c7cb737347352cb850e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapHitReceiver
+  acceptsHits: 1
+  knockbackMultiplier: 1
+--- !u!114 &6742095518431103813
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 799306080639723928}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01abc9ad43374728aa2846857e24668d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapHurtbox
+  gizmoColor: {r: 0.1, g: 0.8, b: 1, a: 0.85}
+  hurtboxCollider: {fileID: 3644280061552033297}
+--- !u!1 &6742095518431103820
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6742095518431103821}
+  - component: {fileID: 6742095518431103822}
+  m_Layer: 0
+  m_Name: AttackHitbox
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6742095518431103821
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6742095518431103820}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 9060141001820132437}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6742095518431103822
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6742095518431103820}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8c329b5f1ce498aac347273830a7f3b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapAttackHitbox
+  targetLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  inactivePreview: 0

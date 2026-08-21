@@ -14,6 +14,8 @@ namespace Qusap
         private readonly Dictionary<Rigidbody, PlayerState> trackedPlayers = new();
         private BoxCollider detectionTrigger;
 
+        public Collider SolidCollider => solidCollider;
+
         private sealed class PlayerState
         {
             public Rigidbody Rigidbody;

@@ -11,10 +11,12 @@ namespace Qusap
         private InputAction moveAction;
         private InputAction jumpAction;
         private InputAction dropAction;
+        private InputAction dashAction;
         private float horizontalValue;
         private bool jumpPressed;
         private bool jumpReleased;
         private bool dropPressed;
+        private bool dashPressed;
 
         public float HorizontalValue => horizontalValue;
 
@@ -22,13 +24,14 @@ namespace Qusap
         {
             if (inputActionAsset == null)
             {
-                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move', 'Gameplay/Jump', and 'Gameplay/Drop' actions assigned.");
+                Debug.LogError("QusapInputReader requires an InputActionAsset with the 'Gameplay/Move', 'Gameplay/Jump', 'Gameplay/Drop', and 'Gameplay/Dash' actions assigned.");
                 return;
             }
 
             moveAction = inputActionAsset.FindAction("Gameplay/Move");
             jumpAction = inputActionAsset.FindAction("Gameplay/Jump");
             dropAction = inputActionAsset.FindAction("Gameplay/Drop");
+            dashAction = inputActionAsset.FindAction("Gameplay/Dash");
 
             if (moveAction == null)
             {
@@ -43,6 +46,11 @@ namespace Qusap
             if (dropAction == null)
             {
                 Debug.LogError("QusapInputReader could not find the 'Gameplay/Drop' action in the assigned InputActionAsset.");
+            }
+
+            if (dashAction == null)
+            {
+                Debug.LogError("QusapInputReader could not find the 'Gameplay/Dash' action in the assigned InputActionAsset.");
             }
         }
 
@@ -65,10 +73,22 @@ namespace Qusap
                 dropAction.Enable();
                 dropAction.performed += HandleDropPerformed;
             }
+
+            if (dashAction != null)
+            {
+                dashAction.Enable();
+                dashAction.performed += HandleDashPerformed;
+            }
         }
 
         private void OnDisable()
         {
+            if (dashAction != null)
+            {
+                dashAction.performed -= HandleDashPerformed;
+                dashAction.Disable();
+            }
+
             if (dropAction != null)
             {
                 dropAction.performed -= HandleDropPerformed;
@@ -131,6 +151,17 @@ namespace Qusap
             return true;
         }
 
+        public bool ConsumeDashPressed()
+        {
+            if (!dashPressed)
+            {
+                return false;
+            }
+
+            dashPressed = false;
+            return true;
+        }
+
         private void HandleJumpPerformed(InputAction.CallbackContext context)
         {
             jumpPressed = true;
@@ -144,6 +175,11 @@ namespace Qusap
         private void HandleDropPerformed(InputAction.CallbackContext context)
         {
             dropPressed = true;
+        }
+
+        private void HandleDashPerformed(InputAction.CallbackContext context)
+        {
+            dashPressed = true;
         }
     }
 }

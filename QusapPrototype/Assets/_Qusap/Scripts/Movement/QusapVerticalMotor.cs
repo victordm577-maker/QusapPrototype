@@ -30,6 +30,7 @@ namespace Qusap
         private QusapGroundSensor groundSensor;
         private QusapWallSensor wallSensor;
         private QusapHorizontalMotor horizontalMotor;
+        private QusapDashMotor dashMotor;
         private bool isRising;
         private float riseGravity;
         private float coyoteTimeRemaining;
@@ -43,6 +44,7 @@ namespace Qusap
             groundSensor = GetComponent<QusapGroundSensor>();
             wallSensor = GetComponent<QusapWallSensor>();
             horizontalMotor = GetComponent<QusapHorizontalMotor>();
+            dashMotor = GetComponent<QusapDashMotor>();
         }
 
         private void OnValidate()
@@ -64,6 +66,11 @@ namespace Qusap
 
         private void FixedUpdate()
         {
+            if (dashMotor != null && dashMotor.IsDashing)
+            {
+                return;
+            }
+
             if (inputReader == null || groundSensor == null || wallSensor == null || horizontalMotor == null || rb == null)
             {
                 return;

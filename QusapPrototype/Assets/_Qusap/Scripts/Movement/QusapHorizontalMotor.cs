@@ -18,6 +18,7 @@ namespace Qusap
         private Rigidbody rb;
         private QusapInputReader inputReader;
         private QusapGroundSensor groundSensor;
+        private QusapDashMotor dashMotor;
         private float wallJumpControlLockRemaining;
 
         private void Awake()
@@ -25,6 +26,7 @@ namespace Qusap
             rb = GetComponent<Rigidbody>();
             inputReader = GetComponent<QusapInputReader>();
             groundSensor = GetComponent<QusapGroundSensor>();
+            dashMotor = GetComponent<QusapDashMotor>();
         }
 
         private void OnValidate()
@@ -40,6 +42,11 @@ namespace Qusap
 
         private void FixedUpdate()
         {
+            if (dashMotor != null && dashMotor.IsDashing)
+            {
+                return;
+            }
+
             if (inputReader == null || groundSensor == null || rb == null)
             {
                 return;

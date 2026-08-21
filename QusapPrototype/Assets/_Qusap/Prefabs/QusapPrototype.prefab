@@ -241,10 +241,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 799306080639723928}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 824edae832db59d40ba40663257d7102, type: 3}
+  m_Script: {fileID: 11500000, guid: 5fe13970a8404ca991f78764d6c5b131, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapWallSensor
-  wallNormalThreshold: 0.7
+  m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapDashMotor
+  dashDuration: 0.16
+  dashDistance: 2
+  dashCooldown: 1
+  wallRechargeContactTime: 0.1
 --- !u!114 &3229940206450296814
 MonoBehaviour:
   m_ObjectHideFlags: 0

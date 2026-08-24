@@ -16,6 +16,19 @@ namespace Qusap.EditorTools
         private const string ArenaMaterialFolder = "Assets/_Qusap/Materials";
         private const string ArenaMaterialPath = ArenaMaterialFolder + "/CombatArenaGeometry.mat";
 
+        private static readonly string[] GeneratedPlatformNames =
+        {
+            "LeftPlatform",
+            "CenterPlatform",
+            "RightPlatform"
+        };
+
+        // These heights reproduce the reachable two-unit steps used by the
+        // functional OneWay_01/OneWay_02 platforms in MovementPlayground.
+        private static readonly Vector3 LeftPlatformPosition = new(-5f, 2f, 0f);
+        private static readonly Vector3 CenterPlatformPosition = new(0f, 4f, 0f);
+        private static readonly Vector3 RightPlatformPosition = new(5f, 2f, 0f);
+
         static CombatPlaygroundGenerator()
         {
             EditorApplication.delayCall += GenerateMissingAssets;
@@ -37,7 +50,7 @@ namespace Qusap.EditorTools
                 || AssetDatabase.LoadAssetAtPath<SceneAsset>(CombatScenePath) != null;
             if (assetsExist && !EditorUtility.DisplayDialog(
                     "Regenerate Combat Playground",
-                    "Se reemplazarán únicamente QusapCombatPlayer.prefab y CombatPlayground.unity.",
+                    "Se reemplazarán QusapCombatPlayer.prefab, QusapOneWayPlatform.prefab y las plataformas generadas de CombatPlayground.unity.",
                     "Regenerar",
                     "Cancelar"))
             {
@@ -432,9 +445,7 @@ namespace Qusap.EditorTools
                 CreateSolidCube("CentralFloor", geometryRoot.transform, new Vector3(0f, -0.5f, 0f), new Vector3(24f, 1f, 4f), arenaMaterial);
                 CreateSolidCube("LeftBoundary", geometryRoot.transform, new Vector3(-12.5f, 3.5f, 0f), new Vector3(1f, 8f, 4f), arenaMaterial);
                 CreateSolidCube("RightBoundary", geometryRoot.transform, new Vector3(12.5f, 3.5f, 0f), new Vector3(1f, 8f, 4f), arenaMaterial);
-                CreateOneWayPlatformInstance(oneWayPlatformPrefab, "LeftPlatform", geometryRoot.transform, new Vector3(-5f, 2.6f, 0f));
-                CreateOneWayPlatformInstance(oneWayPlatformPrefab, "CenterPlatform", geometryRoot.transform, new Vector3(0f, 4.4f, 0f));
-                CreateOneWayPlatformInstance(oneWayPlatformPrefab, "RightPlatform", geometryRoot.transform, new Vector3(5f, 2.6f, 0f));
+                CreateGeneratedOneWayPlatforms(oneWayPlatformPrefab, geometryRoot.transform);
 
                 GameObject playerOneObject = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefab, combatScene);
                 GameObject playerTwoObject = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefab, combatScene);
@@ -487,7 +498,11 @@ namespace Qusap.EditorTools
                 light.type = LightType.Directional;
                 light.intensity = 1.25f;
 
-                EditorSceneManager.SaveScene(combatScene, CombatScenePath);
+                if (!EditorSceneManager.SaveScene(combatScene, CombatScenePath))
+                {
+                    throw new System.InvalidOperationException(
+                        $"CombatPlaygroundGenerator failed to save {CombatScenePath}.");
+                }
             }
             finally
             {
@@ -519,7 +534,11 @@ namespace Qusap.EditorTools
 
                 ReplaceOneWayPlatforms(oneWayPlatformPrefab, geometryRoot);
                 EditorSceneManager.MarkSceneDirty(combatScene);
-                EditorSceneManager.SaveScene(combatScene);
+                if (!EditorSceneManager.SaveScene(combatScene))
+                {
+                    throw new System.InvalidOperationException(
+                        $"CombatPlaygroundGenerator failed to save {CombatScenePath} after replacing the one-way platforms.");
+                }
             }
             finally
             {
@@ -532,19 +551,50 @@ namespace Qusap.EditorTools
 
         private static void ReplaceOneWayPlatforms(GameObject oneWayPlatformPrefab, Transform geometryRoot)
         {
-            string[] platformNames = { "LeftPlatform", "CenterPlatform", "RightPlatform" };
-            foreach (string platformName in platformNames)
+            for (int childIndex = geometryRoot.childCount - 1; childIndex >= 0; childIndex--)
             {
-                Transform existingPlatform = geometryRoot.Find(platformName);
-                if (existingPlatform != null)
+                Transform child = geometryRoot.GetChild(childIndex);
+                if (IsGeneratedPlatformName(child.name))
                 {
-                    Object.DestroyImmediate(existingPlatform.gameObject);
+                    Object.DestroyImmediate(child.gameObject);
                 }
             }
 
-            CreateOneWayPlatformInstance(oneWayPlatformPrefab, "LeftPlatform", geometryRoot, new Vector3(-5f, 2.6f, 0f));
-            CreateOneWayPlatformInstance(oneWayPlatformPrefab, "CenterPlatform", geometryRoot, new Vector3(0f, 4.4f, 0f));
-            CreateOneWayPlatformInstance(oneWayPlatformPrefab, "RightPlatform", geometryRoot, new Vector3(5f, 2.6f, 0f));
+            CreateGeneratedOneWayPlatforms(oneWayPlatformPrefab, geometryRoot);
+        }
+
+        private static bool IsGeneratedPlatformName(string objectName)
+        {
+            foreach (string platformName in GeneratedPlatformNames)
+            {
+                if (objectName == platformName)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void CreateGeneratedOneWayPlatforms(
+            GameObject oneWayPlatformPrefab,
+            Transform geometryRoot)
+        {
+            CreateOneWayPlatformInstance(
+                oneWayPlatformPrefab,
+                GeneratedPlatformNames[0],
+                geometryRoot,
+                LeftPlatformPosition);
+            CreateOneWayPlatformInstance(
+                oneWayPlatformPrefab,
+                GeneratedPlatformNames[1],
+                geometryRoot,
+                CenterPlatformPosition);
+            CreateOneWayPlatformInstance(
+                oneWayPlatformPrefab,
+                GeneratedPlatformNames[2],
+                geometryRoot,
+                RightPlatformPosition);
         }
 
         private static Transform FindTransformInScene(Scene scene, string objectName)
@@ -593,6 +643,38 @@ namespace Qusap.EditorTools
             platform.name = name;
             platform.transform.position = position;
             platform.transform.rotation = Quaternion.identity;
+            ValidateOneWayPlatformInstance(platform);
+        }
+
+        private static void ValidateOneWayPlatformInstance(GameObject platformRoot)
+        {
+            QusapOneWayPlatform platform =
+                platformRoot.GetComponentInChildren<QusapOneWayPlatform>(true);
+            BoxCollider solidCollider = platformRoot.GetComponent<BoxCollider>();
+            BoxCollider detectionTrigger = platform != null
+                ? platform.GetComponent<BoxCollider>()
+                : null;
+            GameObject nearestPrefabRoot = platform != null
+                ? PrefabUtility.GetNearestPrefabInstanceRoot(platform.gameObject)
+                : null;
+
+            bool isCompleteOwnInstance = platform != null
+                && platform.enabled
+                && solidCollider != null
+                && solidCollider.enabled
+                && !solidCollider.isTrigger
+                && detectionTrigger != null
+                && detectionTrigger.enabled
+                && detectionTrigger.isTrigger
+                && platform.SolidCollider == solidCollider
+                && nearestPrefabRoot == platformRoot;
+
+            if (!isCompleteOwnInstance)
+            {
+                Object.DestroyImmediate(platformRoot);
+                throw new System.InvalidOperationException(
+                    "CombatPlaygroundGenerator instantiated an incomplete one-way platform or one whose Solid Collider does not belong to that prefab instance.");
+            }
         }
 
         private static void SetInitialFacing(QusapCombatController controller, int direction)

@@ -16,11 +16,16 @@ namespace Qusap.EditorTools
     {
         private const string MenuPath = "Tools/Qusap/Create Qusap Luz Air Locomotion Test";
         private const string ActiveVisualName = "PlayerVisual";
-        private const string BackupVisualName = "PlayerVisual_LocomotionV2_Backup";
-        private const string FbxFileName = "Qusap_Luz_Locomotion_v4.fbx";
-        private const string ControllerFileName = "Qusap_Luz_Animator_v2.controller";
-        private const string TestSceneSuffix = "_QusapLuzAirTest_v1";
-        private const string DialogTitle = "Qusap Luz Air Locomotion Test";
+
+        private static readonly InstallationConfig AirConfiguration = new(
+            "Qusap_Luz_Locomotion_v4.fbx",
+            "Qusap_Luz_Animator_v2.controller",
+            "PlayerVisual_LocomotionV2_Backup",
+            "Qusap Luz Air Locomotion Test",
+            null,
+            "_QusapLuzAirTest_v1",
+            null,
+            false);
 
         private static readonly ClipRequirement[] ClipRequirements =
         {
@@ -34,55 +39,67 @@ namespace Qusap.EditorTools
         [MenuItem(MenuPath)]
         private static void CreateTestInstallation()
         {
+            CreateTestInstallation(AirConfiguration);
+        }
+
+        internal static void CreateTestInstallation(InstallationConfig configuration)
+        {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                ShowError("La prueba no puede crearse mientras Unity está entrando o se encuentra en Play Mode.");
+                ShowError(
+                    configuration,
+                    "La prueba no puede crearse mientras Unity está entrando o se encuentra en Play Mode.");
                 return;
             }
 
             Scene sourceScene = SceneManager.GetActiveScene();
             if (!TryValidateSourceScene(
                     sourceScene,
+                    configuration,
                     out GameObject player,
                     out QusapAnimationDriver animationDriver,
                     out Transform previousVisual,
                     out string validationError))
             {
-                ShowError(validationError + "\n\nNo se modificó ningún objeto de escena.");
+                ShowError(configuration, validationError + "\n\nNo se modificó ningún objeto de escena.");
                 return;
             }
 
             if (!TryConfigureFbxAndLoadClips(
+                    configuration,
                     out string fbxPath,
                     out GameObject fbxAsset,
                     out Dictionary<string, AnimationClip> clips,
                     out string fbxError))
             {
-                ShowError(fbxError + "\n\nLa escena no fue modificada.");
+                ShowError(configuration, fbxError + "\n\nLa escena no fue modificada.");
                 return;
             }
 
-            string testScenePath = BuildTestScenePath(sourceScene.path);
-            string controllerPath = CombineAssetPath(Path.GetDirectoryName(fbxPath), ControllerFileName);
+            string testScenePath = BuildTestScenePath(sourceScene.path, configuration);
+            string controllerPath = CombineAssetPath(
+                Path.GetDirectoryName(fbxPath),
+                configuration.ControllerFileName);
 
             UnityEngine.Object existingController = AssetDatabase.LoadMainAssetAtPath(controllerPath);
             if (existingController != null && !(existingController is AnimatorController))
             {
                 ShowError(
+                    configuration,
                     $"Ya existe un asset que no es Animator Controller en la ruta requerida:\n{controllerPath}\n\n" +
                     "La escena no fue modificada.");
                 return;
             }
 
-            if (!CanWriteDestination(testScenePath, "la escena de prueba")
-                || !CanWriteDestination(controllerPath, "el Animator Controller"))
+            if (!CanWriteDestination(configuration, testScenePath, "la escena de prueba")
+                || !CanWriteDestination(configuration, controllerPath, "el Animator Controller"))
             {
                 return;
             }
 
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(testScenePath) != null
                 && !EditorUtility.DisplayDialog(
-                    DialogTitle,
+                    configuration.DialogTitle,
                     $"Ya existe la copia de prueba:\n{testScenePath}\n\n¿Deseas reemplazar su contenido desde la escena activa?",
                     "Reemplazar copia",
                     "Cancelar"))
@@ -91,7 +108,9 @@ namespace Qusap.EditorTools
             }
 
             bool controllerAlreadyExisted = existingController is AnimatorController;
+            Vector3 visualPosition = previousVisual.localPosition;
             Quaternion visualRotation = previousVisual.localRotation;
+            Vector3 visualScale = previousVisual.localScale;
 
             try
             {
@@ -100,6 +119,7 @@ namespace Qusap.EditorTools
                 if (!EditorSceneManager.SaveScene(sourceScene, testScenePath, false))
                 {
                     ShowError(
+                        configuration,
                         $"Unity no pudo guardar la copia de la escena en:\n{testScenePath}\n\n" +
                         "La escena original no fue modificada.");
                     return;
@@ -108,11 +128,11 @@ namespace Qusap.EditorTools
                 Scene testScene = SceneManager.GetActiveScene();
                 AnimatorController controller = RebuildController(controllerPath, clips);
 
-                Undo.SetCurrentGroupName("Create Qusap Luz Air Locomotion Test");
+                Undo.SetCurrentGroupName(configuration.DialogTitle);
                 int undoGroup = Undo.GetCurrentGroup();
 
-                Undo.RecordObject(previousVisual.gameObject, "Back up locomotion v2 PlayerVisual");
-                previousVisual.name = BackupVisualName;
+                Undo.RecordObject(previousVisual.gameObject, "Back up previous PlayerVisual");
+                previousVisual.name = configuration.BackupVisualName;
                 previousVisual.gameObject.SetActive(false);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(previousVisual.gameObject);
 
@@ -122,14 +142,18 @@ namespace Qusap.EditorTools
                     throw new InvalidOperationException($"Unity no pudo instanciar el modelo '{fbxPath}'.");
                 }
 
-                Undo.RegisterCreatedObjectUndo(newVisual, "Create Qusap Luz Air PlayerVisual");
+                Undo.RegisterCreatedObjectUndo(newVisual, "Create Qusap Luz PlayerVisual");
                 newVisual.name = ActiveVisualName;
                 newVisual.SetActive(true);
 
                 Transform newVisualTransform = newVisual.transform;
-                newVisualTransform.localPosition = Vector3.zero;
+                newVisualTransform.localPosition = configuration.PreserveVisualTransform
+                    ? visualPosition
+                    : Vector3.zero;
                 newVisualTransform.localRotation = visualRotation;
-                newVisualTransform.localScale = Vector3.one;
+                newVisualTransform.localScale = configuration.PreserveVisualTransform
+                    ? visualScale
+                    : Vector3.one;
 
                 Animator animator = newVisual.GetComponent<Animator>();
                 if (animator == null)
@@ -137,7 +161,7 @@ namespace Qusap.EditorTools
                     animator = Undo.AddComponent<Animator>(newVisual);
                 }
 
-                Undo.RecordObject(animator, "Configure Qusap Luz Air Animator");
+                Undo.RecordObject(animator, "Configure Qusap Luz Animator");
                 animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 animator.updateMode = AnimatorUpdateMode.Normal;
@@ -152,7 +176,11 @@ namespace Qusap.EditorTools
                     previousVisual,
                     newVisualTransform,
                     animator,
-                    controller);
+                    controller,
+                    configuration,
+                    visualPosition,
+                    visualRotation,
+                    visualScale);
 
                 EditorSceneManager.MarkSceneDirty(testScene);
                 if (!EditorSceneManager.SaveScene(testScene))
@@ -168,21 +196,22 @@ namespace Qusap.EditorTools
                     ? $"actualizado conservando su asset: {controllerPath}"
                     : $"creado: {controllerPath}";
                 string report =
-                    "Prueba de locomoción aérea creada correctamente.\n\n" +
+                    "Prueba de locomoción creada correctamente.\n\n" +
                     $"FBX configurado y reimportado:\n{fbxPath}\n\n" +
                     $"Animator Controller {controllerResult}\n\n" +
                     $"Copia de escena creada o actualizada:\n{testScenePath}\n\n" +
                     "Se validaron los cinco clips públicos, los tres parámetros, los cinco estados, " +
-                    "todas las transiciones, el respaldo v2 desactivado y el nuevo PlayerVisual sin Root Motion.\n\n" +
+                    "todas las transiciones, el respaldo anterior desactivado y el nuevo PlayerVisual sin Root Motion.\n\n" +
                     "La escena original y el prefab funcional no fueron modificados.";
 
                 Debug.Log(report, newVisual);
-                EditorUtility.DisplayDialog(DialogTitle, report, "Aceptar");
+                EditorUtility.DisplayDialog(configuration.DialogTitle, report, "Aceptar");
             }
             catch (Exception exception)
             {
                 Debug.LogException(exception);
                 ShowError(
+                    configuration,
                     "La creación de la prueba no pudo completarse. La escena original permanece intacta; " +
                     "revisa la copia de prueba y la consola para conocer el detalle.\n\n" +
                     exception.Message);
@@ -191,6 +220,7 @@ namespace Qusap.EditorTools
 
         private static bool TryValidateSourceScene(
             Scene scene,
+            InstallationConfig configuration,
             out GameObject player,
             out QusapAnimationDriver animationDriver,
             out Transform previousVisual,
@@ -214,11 +244,16 @@ namespace Qusap.EditorTools
                 return false;
             }
 
-            if (Path.GetFileNameWithoutExtension(scene.path)
-                .EndsWith(TestSceneSuffix, StringComparison.Ordinal))
+            if (string.Equals(
+                    Path.GetFileName(scene.path),
+                    configuration.TestSceneFileName,
+                    StringComparison.Ordinal)
+                || (!string.IsNullOrEmpty(configuration.TestSceneSuffix)
+                    && Path.GetFileNameWithoutExtension(scene.path)
+                        .EndsWith(configuration.TestSceneSuffix, StringComparison.Ordinal)))
             {
                 error =
-                    $"La escena activa ya tiene el sufijo '{TestSceneSuffix}'. " +
+                    "La escena activa ya es la copia de prueba de esta herramienta. " +
                     "Abre la escena original y ejecuta la herramienta desde allí.";
                 return false;
             }
@@ -255,16 +290,45 @@ namespace Qusap.EditorTools
                 return false;
             }
 
-            Transform existingBackup = player.transform.Find(BackupVisualName);
+            if (!string.IsNullOrEmpty(configuration.ExpectedPreviousFbxFileName)
+                && !VisualComesFromExpectedFbx(
+                    previousVisual.gameObject,
+                    configuration.ExpectedPreviousFbxFileName))
+            {
+                error =
+                    $"El PlayerVisual activo no es una instancia de '{configuration.ExpectedPreviousFbxFileName}'. " +
+                    "Para no respaldar ni reemplazar el visual equivocado, no se realizó ningún cambio de escena.";
+                return false;
+            }
+
+            Transform existingBackup = player.transform.Find(configuration.BackupVisualName);
             if (existingBackup != null && existingBackup != previousVisual)
             {
                 error =
-                    $"El jugador '{player.name}' ya contiene un hijo llamado '{BackupVisualName}'. " +
+                    $"El jugador '{player.name}' ya contiene un hijo llamado '{configuration.BackupVisualName}'. " +
                     "Para no sobrescribir el respaldo, no se realizó ningún cambio de escena.";
                 return false;
             }
 
             return true;
+        }
+
+        private static bool VisualComesFromExpectedFbx(
+            GameObject visual,
+            string expectedFbxFileName)
+        {
+            GameObject source = PrefabUtility.GetCorrespondingObjectFromOriginalSource(visual);
+            if (source == null)
+            {
+                source = PrefabUtility.GetCorrespondingObjectFromSource(visual);
+            }
+
+            string sourcePath = source != null ? AssetDatabase.GetAssetPath(source) : null;
+            return !string.IsNullOrEmpty(sourcePath)
+                && string.Equals(
+                    Path.GetFileName(sourcePath),
+                    expectedFbxFileName,
+                    StringComparison.Ordinal);
         }
 
         private static bool TryResolveFunctionalPlayer(
@@ -326,6 +390,7 @@ namespace Qusap.EditorTools
         }
 
         private static bool TryConfigureFbxAndLoadClips(
+            InstallationConfig configuration,
             out string fbxPath,
             out GameObject fbxAsset,
             out Dictionary<string, AnimationClip> clips,
@@ -336,20 +401,23 @@ namespace Qusap.EditorTools
             clips = null;
             error = null;
 
-            string expectedBaseName = Path.GetFileNameWithoutExtension(FbxFileName);
+            string expectedBaseName = Path.GetFileNameWithoutExtension(configuration.FbxFileName);
             string[] matchingPaths = AssetDatabase.FindAssets(expectedBaseName + " t:Model")
                 .Select(AssetDatabase.GUIDToAssetPath)
                 .Where(path =>
                     path.StartsWith("Assets/", StringComparison.Ordinal)
-                    && string.Equals(Path.GetFileName(path), FbxFileName, StringComparison.Ordinal))
+                    && string.Equals(
+                        Path.GetFileName(path),
+                        configuration.FbxFileName,
+                        StringComparison.Ordinal))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
             if (matchingPaths.Length != 1)
             {
                 error = matchingPaths.Length == 0
-                    ? $"AssetDatabase no encontró el FBX exacto '{FbxFileName}' dentro de Assets."
-                    : $"AssetDatabase encontró más de un FBX llamado '{FbxFileName}':\n" +
+                    ? $"AssetDatabase no encontró el FBX exacto '{configuration.FbxFileName}' dentro de Assets."
+                    : $"AssetDatabase encontró más de un FBX llamado '{configuration.FbxFileName}':\n" +
                       string.Join("\n", matchingPaths);
                 return false;
             }
@@ -888,18 +956,29 @@ namespace Qusap.EditorTools
             Transform backupVisual,
             Transform newVisual,
             Animator animator,
-            AnimatorController controller)
+            AnimatorController controller,
+            InstallationConfig configuration,
+            Vector3 previousPosition,
+            Quaternion previousRotation,
+            Vector3 previousScale)
         {
             Transform resolvedVisual = animationDriver.transform.Find(ActiveVisualName);
+            Vector3 expectedPosition = configuration.PreserveVisualTransform
+                ? previousPosition
+                : Vector3.zero;
+            Vector3 expectedScale = configuration.PreserveVisualTransform
+                ? previousScale
+                : Vector3.one;
             if (resolvedVisual != newVisual
                 || !resolvedVisual.gameObject.activeInHierarchy
                 || resolvedVisual.GetComponent<Animator>() != animator
                 || animator.runtimeAnimatorController != controller
                 || animator.applyRootMotion
                 || animator.cullingMode != AnimatorCullingMode.AlwaysAnimate
-                || newVisual.localPosition != Vector3.zero
-                || newVisual.localScale != Vector3.one
-                || backupVisual.name != BackupVisualName
+                || newVisual.localPosition != expectedPosition
+                || newVisual.localRotation != previousRotation
+                || newVisual.localScale != expectedScale
+                || backupVisual.name != configuration.BackupVisualName
                 || backupVisual.gameObject.activeSelf)
             {
                 throw new InvalidOperationException(
@@ -950,11 +1029,20 @@ namespace Qusap.EditorTools
                     .Select(clip => $"- '{clip.name}' (hideFlags: {clip.hideFlags})"));
         }
 
-        private static string BuildTestScenePath(string sourceScenePath)
+        private static string BuildTestScenePath(
+            string sourceScenePath,
+            InstallationConfig configuration)
         {
             string directory = Path.GetDirectoryName(sourceScenePath);
+            if (!string.IsNullOrEmpty(configuration.TestSceneFileName))
+            {
+                return CombineAssetPath(directory, configuration.TestSceneFileName);
+            }
+
             string sceneName = Path.GetFileNameWithoutExtension(sourceScenePath);
-            return CombineAssetPath(directory, sceneName + TestSceneSuffix + ".unity");
+            return CombineAssetPath(
+                directory,
+                sceneName + configuration.TestSceneSuffix + ".unity");
         }
 
         private static string CombineAssetPath(string directory, string fileName)
@@ -962,7 +1050,10 @@ namespace Qusap.EditorTools
             return (directory + "/" + fileName).Replace('\\', '/');
         }
 
-        private static bool CanWriteDestination(string assetPath, string description)
+        private static bool CanWriteDestination(
+            InstallationConfig configuration,
+            string assetPath,
+            string description)
         {
             UnityEngine.Object existingAsset = AssetDatabase.LoadMainAssetAtPath(assetPath);
             if (existingAsset == null
@@ -971,14 +1062,48 @@ namespace Qusap.EditorTools
                 return true;
             }
 
-            ShowError($"No se puede escribir {description} porque no está disponible para edición:\n{assetPath}");
+            ShowError(
+                configuration,
+                $"No se puede escribir {description} porque no está disponible para edición:\n{assetPath}");
             return false;
         }
 
-        private static void ShowError(string message)
+        private static void ShowError(InstallationConfig configuration, string message)
         {
             Debug.LogError(message);
-            EditorUtility.DisplayDialog(DialogTitle, message, "Aceptar");
+            EditorUtility.DisplayDialog(configuration.DialogTitle, message, "Aceptar");
+        }
+
+        internal sealed class InstallationConfig
+        {
+            public InstallationConfig(
+                string fbxFileName,
+                string controllerFileName,
+                string backupVisualName,
+                string dialogTitle,
+                string testSceneFileName,
+                string testSceneSuffix,
+                string expectedPreviousFbxFileName,
+                bool preserveVisualTransform)
+            {
+                FbxFileName = fbxFileName;
+                ControllerFileName = controllerFileName;
+                BackupVisualName = backupVisualName;
+                DialogTitle = dialogTitle;
+                TestSceneFileName = testSceneFileName;
+                TestSceneSuffix = testSceneSuffix;
+                ExpectedPreviousFbxFileName = expectedPreviousFbxFileName;
+                PreserveVisualTransform = preserveVisualTransform;
+            }
+
+            public string FbxFileName { get; }
+            public string ControllerFileName { get; }
+            public string BackupVisualName { get; }
+            public string DialogTitle { get; }
+            public string TestSceneFileName { get; }
+            public string TestSceneSuffix { get; }
+            public string ExpectedPreviousFbxFileName { get; }
+            public bool PreserveVisualTransform { get; }
         }
 
         private sealed class ClipRequirement

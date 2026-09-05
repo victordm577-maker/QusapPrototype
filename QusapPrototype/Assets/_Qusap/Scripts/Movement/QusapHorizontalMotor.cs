@@ -21,6 +21,8 @@ namespace Qusap
         private QusapDashMotor dashMotor;
         private float wallJumpControlLockRemaining;
 
+        public bool IsWallJumpControlLocked => wallJumpControlLockRemaining > 0f;
+
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();

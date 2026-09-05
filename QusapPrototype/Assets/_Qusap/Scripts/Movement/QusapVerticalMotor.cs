@@ -37,6 +37,10 @@ namespace Qusap
         private float jumpBufferRemaining;
         private int lastWallJumpSide;
 
+        // Published by the existing slide branch; animation never repeats wall detection.
+        public bool IsWallSliding { get; private set; }
+        public int WallSide { get; private set; }
+
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();
@@ -66,6 +70,9 @@ namespace Qusap
 
         private void FixedUpdate()
         {
+            IsWallSliding = false;
+            WallSide = 0;
+
             if (dashMotor != null && dashMotor.IsDashing)
             {
                 return;
@@ -156,6 +163,8 @@ namespace Qusap
 
                     if (!groundSensor.IsGrounded && isPushingTowardWall)
                     {
+                        IsWallSliding = true;
+                        WallSide = wallSensor.WallSide;
                         velocity.y = Mathf.Max(velocity.y, -wallSlideMaximumFallSpeed);
                     }
 
@@ -226,6 +235,12 @@ namespace Qusap
             rb.linearVelocity = velocity;
 
             isRising = velocity.y > 0f;
+        }
+
+        private void OnDisable()
+        {
+            IsWallSliding = false;
+            WallSide = 0;
         }
     }
 }

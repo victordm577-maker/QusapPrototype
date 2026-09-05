@@ -9,6 +9,7 @@ namespace Qusap
         private static readonly int SpeedParameter = Animator.StringToHash("Speed");
         private static readonly int VerticalSpeedParameter = Animator.StringToHash("VerticalSpeed");
         private static readonly int GroundedParameter = Animator.StringToHash("Grounded");
+        private static readonly int WallSlidingParameter = Animator.StringToHash("WallSliding");
 
         [SerializeField] private float rightFacingYaw = 150f;
         [SerializeField] private float leftFacingYaw = 210f;
@@ -21,12 +22,19 @@ namespace Qusap
         private QusapInputReader inputReader;
         private Transform playerVisual;
         private float targetFacingYaw;
+        private QusapVerticalMotor verticalMotor;
+        private QusapHorizontalMotor horizontalMotor;
+        private RuntimeAnimatorController cachedController;
+        private bool hasWallSlidingParameter;
+        private bool missingWallProviderReported;
 
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();
             groundSensor = GetComponent<QusapGroundSensor>();
             inputReader = GetComponent<QusapInputReader>();
+            verticalMotor = GetComponent<QusapVerticalMotor>();
+            horizontalMotor = GetComponent<QusapHorizontalMotor>();
 
             if (rb == null)
             {
@@ -76,7 +84,34 @@ namespace Qusap
             }
 
             animator.applyRootMotion = false;
+            CacheWallSlidingParameter();
             targetFacingYaw = playerVisual.localEulerAngles.y;
+        }
+
+        private void CacheWallSlidingParameter()
+        {
+            cachedController = animator.runtimeAnimatorController;
+            hasWallSlidingParameter = false;
+            if (cachedController != null)
+            {
+                foreach (AnimatorControllerParameter parameter in animator.parameters)
+                {
+                    if (parameter.nameHash == WallSlidingParameter
+                        && parameter.type == AnimatorControllerParameterType.Bool)
+                    {
+                        hasWallSlidingParameter = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasWallSlidingParameter && verticalMotor == null && !missingWallProviderReported)
+            {
+                Debug.LogError(
+                    $"{nameof(QusapAnimationDriver)} requires {nameof(QusapVerticalMotor)} on '{gameObject.name}' to provide the real WallSliding state.",
+                    this);
+                missingWallProviderReported = true;
+            }
         }
 
         private void Update()
@@ -88,8 +123,26 @@ namespace Qusap
             animator.SetFloat(VerticalSpeedParameter, velocity.y);
             animator.SetBool(GroundedParameter, groundSensor.IsGrounded);
 
+            if (cachedController != animator.runtimeAnimatorController)
+                CacheWallSlidingParameter();
+
+            bool wallSliding = hasWallSlidingParameter && verticalMotor != null
+                && verticalMotor.isActiveAndEnabled && verticalMotor.IsWallSliding;
+            if (hasWallSlidingParameter)
+                animator.SetBool(WallSlidingParameter, wallSliding);
+
             float horizontalIntent = inputReader.HorizontalValue;
-            if (horizontalIntent > facingThreshold)
+            if (wallSliding)
+            {
+                targetFacingYaw = verticalMotor.WallSide > 0 ? rightFacingYaw : leftFacingYaw;
+            }
+            else if (hasWallSlidingParameter && horizontalMotor != null
+                && horizontalMotor.IsWallJumpControlLocked && Mathf.Abs(velocity.x) > facingThreshold)
+            {
+                // The existing wall jump owns movement during its control lock.
+                targetFacingYaw = velocity.x > 0f ? rightFacingYaw : leftFacingYaw;
+            }
+            else if (horizontalIntent > facingThreshold)
             {
                 targetFacingYaw = rightFacingYaw;
             }

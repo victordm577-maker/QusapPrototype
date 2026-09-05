@@ -41,6 +41,9 @@ namespace Qusap
         public bool IsWallSliding { get; private set; }
         public int WallSide { get; private set; }
 
+        // Visual notification only. Incremented exclusively after a real wall jump is applied.
+        public uint WallJumpSequence { get; private set; }
+
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();
@@ -216,6 +219,7 @@ namespace Qusap
                 timeToApex = Mathf.Max(timeToApex, 0.1f);
                 riseGravity = (-2f * jumpHeight) / (timeToApex * timeToApex);
                 isRising = velocity.y > 0f;
+                unchecked { WallJumpSequence++; }
                 return;
             }
 

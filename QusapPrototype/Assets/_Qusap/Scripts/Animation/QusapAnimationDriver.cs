@@ -10,6 +10,10 @@ namespace Qusap
         private static readonly int VerticalSpeedParameter = Animator.StringToHash("VerticalSpeed");
         private static readonly int GroundedParameter = Animator.StringToHash("Grounded");
         private static readonly int WallSlidingParameter = Animator.StringToHash("WallSliding");
+        private static readonly int WallJumpingParameter = Animator.StringToHash("WallJumping");
+        private static readonly int WallJumpState = Animator.StringToHash("Qusap_WallJump");
+        private const float WallJumpFacingHold = 0.10f;
+        private const float WallJumpVisualTimeout = 0.33f; // 0.30s clip + 0.03s entry blend.
 
         [SerializeField] private float rightFacingYaw = 150f;
         [SerializeField] private float leftFacingYaw = 210f;
@@ -27,6 +31,28 @@ namespace Qusap
         private RuntimeAnimatorController cachedController;
         private bool hasWallSlidingParameter;
         private bool missingWallProviderReported;
+        private bool hasWallJumpingParameter;
+        private uint observedWallJumpSequence;
+        private bool wallJumping;
+        private bool enteredWallJump;
+        private float wallJumpStartedAt;
+        private float heldWallJumpYaw;
+
+        private void OnEnable()
+        {
+            // Do not replay a jump that occurred while the visual driver was disabled.
+            var motor = GetComponent<QusapVerticalMotor>();
+            observedWallJumpSequence = motor != null ? motor.WallJumpSequence : 0;
+            wallJumping = false;
+            enteredWallJump = false;
+        }
+
+        private void OnDisable()
+        {
+            wallJumping = false;
+            if (animator != null && hasWallJumpingParameter)
+                animator.SetBool(WallJumpingParameter, false);
+        }
 
         private void Awake()
         {
@@ -92,6 +118,8 @@ namespace Qusap
         {
             cachedController = animator.runtimeAnimatorController;
             hasWallSlidingParameter = false;
+            hasWallJumpingParameter = false;
+            wallJumping = false;
             if (cachedController != null)
             {
                 foreach (AnimatorControllerParameter parameter in animator.parameters)
@@ -100,8 +128,10 @@ namespace Qusap
                         && parameter.type == AnimatorControllerParameterType.Bool)
                     {
                         hasWallSlidingParameter = true;
-                        break;
                     }
+                    if (parameter.nameHash == WallJumpingParameter
+                        && parameter.type == AnimatorControllerParameterType.Bool)
+                        hasWallJumpingParameter = true;
                 }
             }
 
@@ -131,8 +161,18 @@ namespace Qusap
             if (hasWallSlidingParameter)
                 animator.SetBool(WallSlidingParameter, wallSliding);
 
+            UpdateWallJumpVisual();
+
             float horizontalIntent = inputReader.HorizontalValue;
-            if (wallSliding)
+            if (wallJumping && Time.time - wallJumpStartedAt < WallJumpFacingHold)
+            {
+                targetFacingYaw = heldWallJumpYaw;
+            }
+            else if (wallJumping && Mathf.Abs(velocity.x) > facingThreshold)
+            {
+                targetFacingYaw = velocity.x > 0f ? rightFacingYaw : leftFacingYaw;
+            }
+            else if (wallSliding)
             {
                 targetFacingYaw = verticalMotor.WallSide > 0 ? rightFacingYaw : leftFacingYaw;
             }
@@ -157,6 +197,40 @@ namespace Qusap
                 targetFacingYaw,
                 turnSpeedDegrees * Time.deltaTime);
             playerVisual.localEulerAngles = localEulerAngles;
+        }
+
+        private void UpdateWallJumpVisual()
+        {
+            if (verticalMotor == null)
+                return;
+
+            bool newWallJump = observedWallJumpSequence != verticalMotor.WallJumpSequence;
+            observedWallJumpSequence = verticalMotor.WallJumpSequence;
+            if (!hasWallJumpingParameter)
+                return;
+
+            if (newWallJump && verticalMotor.isActiveAndEnabled && !groundSensor.IsGrounded)
+            {
+                wallJumping = true;
+                enteredWallJump = false;
+                wallJumpStartedAt = Time.time;
+                heldWallJumpYaw = playerVisual.localEulerAngles.y;
+            }
+
+            if (wallJumping)
+            {
+                bool inWallJump = animator.GetCurrentAnimatorStateInfo(0).shortNameHash == WallJumpState
+                    || (animator.IsInTransition(0)
+                        && animator.GetNextAnimatorStateInfo(0).shortNameHash == WallJumpState);
+                if (inWallJump)
+                    enteredWallJump = true;
+                if (groundSensor.IsGrounded || !verticalMotor.isActiveAndEnabled
+                    || (enteredWallJump && !inWallJump)
+                    || Time.time - wallJumpStartedAt >= WallJumpVisualTimeout)
+                    wallJumping = false;
+            }
+
+            animator.SetBool(WallJumpingParameter, wallJumping);
         }
     }
 }

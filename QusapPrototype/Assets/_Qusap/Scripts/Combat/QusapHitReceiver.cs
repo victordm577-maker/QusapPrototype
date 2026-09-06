@@ -16,6 +16,8 @@ namespace Qusap
 
         public event Action<QusapHitInfo> HitReceived;
 
+        public float TotalDamageReceived { get; private set; }
+
         public bool AcceptsHits
         {
             get => acceptsHits;
@@ -48,17 +50,25 @@ namespace Qusap
             velocity.x = hitInfo.HorizontalDirection
                 * hitInfo.HorizontalKnockback
                 * knockbackMultiplier;
-            velocity.y = Mathf.Max(
-                velocity.y,
-                hitInfo.VerticalKnockback * knockbackMultiplier);
+            float verticalKnockback = hitInfo.VerticalKnockback * knockbackMultiplier;
+            velocity.y = verticalKnockback < 0f
+                ? Mathf.Min(velocity.y, verticalKnockback)
+                : Mathf.Max(velocity.y, verticalKnockback);
             velocity.z = 0f;
             rb.linearVelocity = velocity;
             rb.WakeUp();
 
             hitstunController?.EnterHitstun(hitInfo.HitstunDuration);
 
+            TotalDamageReceived += Mathf.Max(hitInfo.Damage, 0f);
+
             HitReceived?.Invoke(hitInfo);
             return true;
+        }
+
+        public void ResetDamage()
+        {
+            TotalDamageReceived = 0f;
         }
     }
 }

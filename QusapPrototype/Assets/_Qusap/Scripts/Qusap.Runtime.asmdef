@@ -1,0 +1,7 @@
+{
+  "name": "Qusap.Runtime",
+  "rootNamespace": "Qusap",
+  "references": [
+    "Unity.InputSystem"
+  ]
+}

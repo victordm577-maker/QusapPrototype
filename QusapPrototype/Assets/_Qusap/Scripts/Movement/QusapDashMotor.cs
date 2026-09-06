@@ -20,6 +20,7 @@ namespace Qusap
         private QusapInputReader inputReader;
         private QusapGroundSensor groundSensor;
         private QusapWallSensor wallSensor;
+        private QusapCombatController combatController;
         private Collider trackedWallCollider;
         private Collider lastWallRechargeCollider;
         private float trackedWallContactTime;
@@ -39,6 +40,7 @@ namespace Qusap
             inputReader = GetComponent<QusapInputReader>();
             groundSensor = GetComponent<QusapGroundSensor>();
             wallSensor = GetComponent<QusapWallSensor>();
+            combatController = GetComponent<QusapCombatController>();
         }
 
         private void OnValidate()
@@ -103,7 +105,8 @@ namespace Qusap
 
         private bool CanStartDash()
         {
-            return groundSensor.IsGrounded || hasAirDash;
+            return (groundSensor.IsGrounded || hasAirDash)
+                && (combatController == null || !combatController.BlocksDash);
         }
 
         private void StartDash()

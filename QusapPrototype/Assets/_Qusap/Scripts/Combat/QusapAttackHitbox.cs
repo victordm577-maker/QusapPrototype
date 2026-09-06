@@ -9,10 +9,12 @@ namespace Qusap
     {
         [SerializeField] private LayerMask targetLayers = ~0;
         [SerializeField] private QusapAttackType inactivePreview = QusapAttackType.WeakKick;
+        [SerializeField] private QusapAttackVariant inactiveAirPreview = QusapAttackVariant.None;
 
         private readonly HashSet<QusapHitReceiver> hitTargets = new();
         private QusapCombatController owner;
-        private QusapAttackData currentAttack;
+        private IQusapAttackDefinition currentAttack;
+        private QusapAttackVariant currentVariant;
         private int attackDirection = 1;
 
         public bool IsActive { get; private set; }
@@ -22,9 +24,13 @@ namespace Qusap
             owner = combatOwner;
         }
 
-        internal void BeginAttack(QusapAttackData attackData, int horizontalDirection)
+        internal void BeginAttack(
+            IQusapAttackDefinition attackData,
+            QusapAttackVariant attackVariant,
+            int horizontalDirection)
         {
             currentAttack = attackData;
+            currentVariant = attackVariant;
             attackDirection = horizontalDirection < 0 ? -1 : 1;
             hitTargets.Clear();
             IsActive = currentAttack != null;
@@ -34,6 +40,7 @@ namespace Qusap
         {
             IsActive = false;
             currentAttack = null;
+            currentVariant = QusapAttackVariant.None;
             hitTargets.Clear();
         }
 
@@ -83,6 +90,8 @@ namespace Qusap
                 QusapHitInfo hitInfo = new(
                     owner,
                     currentAttack.AttackType,
+                    currentVariant,
+                    currentAttack.Damage,
                     attackDirection,
                     currentAttack.HorizontalKnockback,
                     currentAttack.VerticalKnockback,
@@ -96,17 +105,22 @@ namespace Qusap
 
                 hitTargets.Add(receiver);
                 owner.NotifyAttackHit(receiver);
+
+                if (!IsActive)
+                {
+                    return;
+                }
             }
         }
 
-        private Vector3 GetWorldCenter(QusapAttackData attackData, int horizontalDirection)
+        private Vector3 GetWorldCenter(IQusapAttackDefinition attackData, int horizontalDirection)
         {
             Vector2 offset = attackData.HitboxOffset;
             Vector3 localCenter = new(offset.x * horizontalDirection, offset.y, 0f);
             return owner.transform.TransformPoint(localCenter);
         }
 
-        private Vector3 GetWorldHalfExtents(QusapAttackData attackData)
+        private Vector3 GetWorldHalfExtents(IQusapAttackDefinition attackData)
         {
             Vector3 scale = owner.transform.lossyScale;
             return new Vector3(
@@ -124,9 +138,14 @@ namespace Qusap
                 return;
             }
 
-            QusapAttackData previewData = IsActive && currentAttack != null
+            QusapAttackVariant previewVariant = IsActive
+                ? currentVariant
+                : inactiveAirPreview;
+            IQusapAttackDefinition previewData = IsActive && currentAttack != null
                 ? currentAttack
-                : owner.GetAttackData(inactivePreview);
+                : previewVariant != QusapAttackVariant.None
+                    ? owner.GetAttackDefinition(previewVariant)
+                    : owner.GetAttackData(inactivePreview);
 
             if (previewData == null)
             {
@@ -143,15 +162,27 @@ namespace Qusap
 
             Matrix4x4 previousMatrix = Gizmos.matrix;
             Gizmos.matrix = owner.transform.localToWorldMatrix;
-            Gizmos.color = IsActive
-                ? new Color(1f, 0.15f, 0.05f, 0.28f)
-                : new Color(1f, 0.75f, 0.1f, 0.12f);
+            Color wireColor = GetVariantColor(previewVariant);
+            Color fillColor = wireColor;
+            fillColor.a = IsActive ? 0.28f : 0.12f;
+            wireColor.a = IsActive ? 1f : 0.8f;
+            Gizmos.color = fillColor;
             Gizmos.DrawCube(localCenter, localSize);
-            Gizmos.color = IsActive
-                ? new Color(1f, 0.1f, 0.05f, 1f)
-                : new Color(1f, 0.75f, 0.1f, 0.8f);
+            Gizmos.color = wireColor;
             Gizmos.DrawWireCube(localCenter, localSize);
             Gizmos.matrix = previousMatrix;
+        }
+
+        private static Color GetVariantColor(QusapAttackVariant variant)
+        {
+            return variant switch
+            {
+                QusapAttackVariant.WeakKickAir => new Color(1f, 0.85f, 0.05f, 1f),
+                QusapAttackVariant.StrongKickAir => new Color(1f, 0.4f, 0.05f, 1f),
+                QusapAttackVariant.DiveHeadbuttAir => new Color(0f, 0.75f, 0.78f, 1f),
+                QusapAttackVariant.None => new Color(1f, 0.75f, 0.1f, 1f),
+                _ => new Color(1f, 0.15f, 0.05f, 1f)
+            };
         }
     }
 }

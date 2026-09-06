@@ -1,0 +1,11 @@
+{
+  "name": "Qusap.Tests.PlayMode",
+  "references": [
+    "Qusap.Runtime",
+    "Unity.InputSystem"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false
+}

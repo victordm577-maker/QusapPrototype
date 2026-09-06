@@ -1,0 +1,14 @@
+{
+  "name": "Qusap.Tests.EditMode",
+  "references": [
+    "Qusap.Runtime",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false
+}

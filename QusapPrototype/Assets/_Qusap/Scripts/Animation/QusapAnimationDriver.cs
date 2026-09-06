@@ -11,6 +11,7 @@ namespace Qusap
         private static readonly int GroundedParameter = Animator.StringToHash("Grounded");
         private static readonly int WallSlidingParameter = Animator.StringToHash("WallSliding");
         private static readonly int WallJumpingParameter = Animator.StringToHash("WallJumping");
+        private static readonly int DashingParameter = Animator.StringToHash("Dashing");
         private static readonly int WallJumpState = Animator.StringToHash("Qusap_WallJump");
         private const float WallJumpFacingHold = 0.10f;
         private const float WallJumpVisualTimeout = 0.33f; // 0.30s clip + 0.03s entry blend.
@@ -28,15 +29,20 @@ namespace Qusap
         private float targetFacingYaw;
         private QusapVerticalMotor verticalMotor;
         private QusapHorizontalMotor horizontalMotor;
+        private QusapDashMotor dashMotor;
         private RuntimeAnimatorController cachedController;
         private bool hasWallSlidingParameter;
         private bool missingWallProviderReported;
+        private bool missingDashProviderReported;
         private bool hasWallJumpingParameter;
         private uint observedWallJumpSequence;
         private bool wallJumping;
         private bool enteredWallJump;
         private float wallJumpStartedAt;
         private float heldWallJumpYaw;
+        private bool hasDashingParameter;
+        private bool wasDashing;
+        private float dashFacingYaw;
 
         private void OnEnable()
         {
@@ -45,6 +51,7 @@ namespace Qusap
             observedWallJumpSequence = motor != null ? motor.WallJumpSequence : 0;
             wallJumping = false;
             enteredWallJump = false;
+            wasDashing = false;
         }
 
         private void OnDisable()
@@ -52,6 +59,8 @@ namespace Qusap
             wallJumping = false;
             if (animator != null && hasWallJumpingParameter)
                 animator.SetBool(WallJumpingParameter, false);
+            if (animator != null && hasDashingParameter)
+                animator.SetBool(DashingParameter, false);
         }
 
         private void Awake()
@@ -61,6 +70,7 @@ namespace Qusap
             inputReader = GetComponent<QusapInputReader>();
             verticalMotor = GetComponent<QusapVerticalMotor>();
             horizontalMotor = GetComponent<QusapHorizontalMotor>();
+            dashMotor = GetComponent<QusapDashMotor>();
 
             if (rb == null)
             {
@@ -119,7 +129,9 @@ namespace Qusap
             cachedController = animator.runtimeAnimatorController;
             hasWallSlidingParameter = false;
             hasWallJumpingParameter = false;
+            hasDashingParameter = false;
             wallJumping = false;
+            wasDashing = false;
             if (cachedController != null)
             {
                 foreach (AnimatorControllerParameter parameter in animator.parameters)
@@ -132,6 +144,9 @@ namespace Qusap
                     if (parameter.nameHash == WallJumpingParameter
                         && parameter.type == AnimatorControllerParameterType.Bool)
                         hasWallJumpingParameter = true;
+                    if (parameter.nameHash == DashingParameter
+                        && parameter.type == AnimatorControllerParameterType.Bool)
+                        hasDashingParameter = true;
                 }
             }
 
@@ -141,6 +156,14 @@ namespace Qusap
                     $"{nameof(QusapAnimationDriver)} requires {nameof(QusapVerticalMotor)} on '{gameObject.name}' to provide the real WallSliding state.",
                     this);
                 missingWallProviderReported = true;
+            }
+
+            if (hasDashingParameter && dashMotor == null && !missingDashProviderReported)
+            {
+                Debug.LogError(
+                    $"{nameof(QusapAnimationDriver)} requires {nameof(QusapDashMotor)} on '{gameObject.name}' to provide the real Dashing state.",
+                    this);
+                missingDashProviderReported = true;
             }
         }
 
@@ -163,8 +186,21 @@ namespace Qusap
 
             UpdateWallJumpVisual();
 
+            bool dashing = hasDashingParameter && dashMotor != null
+                && dashMotor.isActiveAndEnabled && dashMotor.IsDashing;
+            if (hasDashingParameter)
+                animator.SetBool(DashingParameter, dashing);
+
+            if (dashing && !wasDashing && Mathf.Abs(velocity.x) > facingThreshold)
+                dashFacingYaw = velocity.x > 0f ? rightFacingYaw : leftFacingYaw;
+            wasDashing = dashing;
+
             float horizontalIntent = inputReader.HorizontalValue;
-            if (wallJumping && Time.time - wallJumpStartedAt < WallJumpFacingHold)
+            if (dashing)
+            {
+                targetFacingYaw = dashFacingYaw;
+            }
+            else if (wallJumping && Time.time - wallJumpStartedAt < WallJumpFacingHold)
             {
                 targetFacingYaw = heldWallJumpYaw;
             }

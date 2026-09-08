@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace Qusap
@@ -12,6 +13,8 @@ namespace Qusap
         private static readonly int WallSlidingParameter = Animator.StringToHash("WallSliding");
         private static readonly int WallJumpingParameter = Animator.StringToHash("WallJumping");
         private static readonly int DashingParameter = Animator.StringToHash("Dashing");
+        private static readonly int CombatAnimatingParameter = Animator.StringToHash("CombatAnimating");
+        private static readonly int AttackVariantParameter = Animator.StringToHash("AttackVariant");
         private static readonly int WallJumpState = Animator.StringToHash("Qusap_WallJump");
         private const float WallJumpFacingHold = 0.10f;
         private const float WallJumpVisualTimeout = 0.33f; // 0.30s clip + 0.03s entry blend.
@@ -20,16 +23,17 @@ namespace Qusap
         [SerializeField] private float leftFacingYaw = 210f;
         [SerializeField] private float turnSpeedDegrees = 720f;
         [SerializeField] private float facingThreshold = 0.05f;
+        [SerializeField] private Animator animator;
+        [SerializeField] private Transform playerVisual;
 
         private Rigidbody rb;
-        private Animator animator;
         private QusapGroundSensor groundSensor;
         private QusapInputReader inputReader;
-        private Transform playerVisual;
         private float targetFacingYaw;
         private QusapVerticalMotor verticalMotor;
         private QusapHorizontalMotor horizontalMotor;
         private QusapDashMotor dashMotor;
+        private QusapCombatController combatController;
         private RuntimeAnimatorController cachedController;
         private bool hasWallSlidingParameter;
         private bool missingWallProviderReported;
@@ -43,6 +47,11 @@ namespace Qusap
         private bool hasDashingParameter;
         private bool wasDashing;
         private float dashFacingYaw;
+        private bool hasCombatAnimatingParameter;
+        private bool hasAttackVariantParameter;
+        private bool combatFacingLocked;
+        private float combatFacingYaw;
+        private bool invalidAnimatorReported;
 
         private void OnEnable()
         {
@@ -52,14 +61,18 @@ namespace Qusap
             wallJumping = false;
             enteredWallJump = false;
             wasDashing = false;
+            SubscribeToCombatEvents();
+            SynchronizeCombatAnimation();
         }
 
         private void OnDisable()
         {
+            UnsubscribeFromCombatEvents();
+            ClearCombatAnimation();
             wallJumping = false;
-            if (animator != null && hasWallJumpingParameter)
+            if (HasValidAnimatorController(animator) && hasWallJumpingParameter)
                 animator.SetBool(WallJumpingParameter, false);
-            if (animator != null && hasDashingParameter)
+            if (HasValidAnimatorController(animator) && hasDashingParameter)
                 animator.SetBool(DashingParameter, false);
         }
 
@@ -71,6 +84,7 @@ namespace Qusap
             verticalMotor = GetComponent<QusapVerticalMotor>();
             horizontalMotor = GetComponent<QusapHorizontalMotor>();
             dashMotor = GetComponent<QusapDashMotor>();
+            combatController = GetComponent<QusapCombatController>();
 
             if (rb == null)
             {
@@ -99,37 +113,36 @@ namespace Qusap
                 return;
             }
 
-            playerVisual = transform.Find("PlayerVisual");
-            if (playerVisual == null || !playerVisual.gameObject.activeInHierarchy)
+            if (!TryResolveAnimator())
             {
-                Debug.LogError(
-                    $"{nameof(QusapAnimationDriver)} could not find an active child named 'PlayerVisual' on '{gameObject.name}'.",
-                    this);
-                enabled = false;
-                return;
-            }
-
-            animator = playerVisual.GetComponent<Animator>();
-            if (animator == null)
-            {
-                Debug.LogError(
-                    $"{nameof(QusapAnimationDriver)} requires an Animator on the child 'PlayerVisual'.",
-                    this);
                 enabled = false;
                 return;
             }
 
             animator.applyRootMotion = false;
-            CacheWallSlidingParameter();
+            CacheAnimatorParameters();
             targetFacingYaw = playerVisual.localEulerAngles.y;
         }
 
-        private void CacheWallSlidingParameter()
+        private void CacheAnimatorParameters()
         {
+            if (!HasValidAnimatorController(animator))
+            {
+                cachedController = null;
+                hasWallSlidingParameter = false;
+                hasWallJumpingParameter = false;
+                hasDashingParameter = false;
+                hasCombatAnimatingParameter = false;
+                hasAttackVariantParameter = false;
+                return;
+            }
+
             cachedController = animator.runtimeAnimatorController;
             hasWallSlidingParameter = false;
             hasWallJumpingParameter = false;
             hasDashingParameter = false;
+            hasCombatAnimatingParameter = false;
+            hasAttackVariantParameter = false;
             wallJumping = false;
             wasDashing = false;
             if (cachedController != null)
@@ -147,6 +160,12 @@ namespace Qusap
                     if (parameter.nameHash == DashingParameter
                         && parameter.type == AnimatorControllerParameterType.Bool)
                         hasDashingParameter = true;
+                    if (parameter.nameHash == CombatAnimatingParameter
+                        && parameter.type == AnimatorControllerParameterType.Bool)
+                        hasCombatAnimatingParameter = true;
+                    if (parameter.nameHash == AttackVariantParameter
+                        && parameter.type == AnimatorControllerParameterType.Int)
+                        hasAttackVariantParameter = true;
                 }
             }
 
@@ -165,10 +184,15 @@ namespace Qusap
                     this);
                 missingDashProviderReported = true;
             }
+
+            SynchronizeCombatAnimation();
         }
 
         private void Update()
         {
+            if (!EnsureAnimatorReady())
+                return;
+
             Vector3 velocity = rb.linearVelocity;
             float horizontalSpeed = Mathf.Abs(velocity.x);
 
@@ -177,7 +201,12 @@ namespace Qusap
             animator.SetBool(GroundedParameter, groundSensor.IsGrounded);
 
             if (cachedController != animator.runtimeAnimatorController)
-                CacheWallSlidingParameter();
+                CacheAnimatorParameters();
+
+            if (combatFacingLocked && (combatController == null
+                || !IsAnimatedCombatKick(combatController.CurrentAttackVariant)
+                || combatController.CurrentPhase == QusapAttackPhase.Idle))
+                ClearCombatAnimation();
 
             bool wallSliding = hasWallSlidingParameter && verticalMotor != null
                 && verticalMotor.isActiveAndEnabled && verticalMotor.IsWallSliding;
@@ -196,7 +225,11 @@ namespace Qusap
             wasDashing = dashing;
 
             float horizontalIntent = inputReader.HorizontalValue;
-            if (dashing)
+            if (combatFacingLocked)
+            {
+                targetFacingYaw = combatFacingYaw;
+            }
+            else if (dashing)
             {
                 targetFacingYaw = dashFacingYaw;
             }
@@ -233,6 +266,183 @@ namespace Qusap
                 targetFacingYaw,
                 turnSpeedDegrees * Time.deltaTime);
             playerVisual.localEulerAngles = localEulerAngles;
+        }
+
+        private void SubscribeToCombatEvents()
+        {
+            if (combatController == null)
+                combatController = GetComponent<QusapCombatController>();
+            if (combatController == null)
+                return;
+
+            UnsubscribeFromCombatEvents();
+            combatController.AttackVariantStarted += HandleAttackVariantStarted;
+            combatController.AttackPhaseChanged += HandleAttackPhaseChanged;
+            combatController.AttackEnded += HandleAttackEnded;
+        }
+
+        private void UnsubscribeFromCombatEvents()
+        {
+            if (combatController == null)
+                return;
+            combatController.AttackVariantStarted -= HandleAttackVariantStarted;
+            combatController.AttackPhaseChanged -= HandleAttackPhaseChanged;
+            combatController.AttackEnded -= HandleAttackEnded;
+        }
+
+        private void HandleAttackVariantStarted(QusapAttackVariant variant)
+        {
+            if (!IsAnimatedCombatKick(variant))
+            {
+                ClearCombatAnimation();
+                return;
+            }
+
+            int direction = combatController != null ? combatController.AttackDirection : 0;
+            combatFacingYaw = direction > 0 ? rightFacingYaw
+                : direction < 0 ? leftFacingYaw
+                : playerVisual.localEulerAngles.y;
+            targetFacingYaw = combatFacingYaw;
+            combatFacingLocked = true;
+            SetCombatParameters(true, variant);
+        }
+
+        private void HandleAttackPhaseChanged(QusapAttackVariant variant, QusapAttackPhase phase)
+        {
+            if (phase == QusapAttackPhase.Idle || !IsAnimatedCombatKick(variant))
+                ClearCombatAnimation();
+        }
+
+        private void HandleAttackEnded(QusapAttackVariant variant, bool canceled)
+        {
+            if (IsAnimatedCombatKick(variant) || combatFacingLocked)
+                ClearCombatAnimation();
+        }
+
+        private void SynchronizeCombatAnimation()
+        {
+            if (combatController != null && combatController.CurrentPhase != QusapAttackPhase.Idle
+                && IsAnimatedCombatKick(combatController.CurrentAttackVariant))
+            {
+                if (!combatFacingLocked)
+                {
+                    int direction = combatController.AttackDirection;
+                    combatFacingYaw = direction > 0 ? rightFacingYaw
+                        : direction < 0 ? leftFacingYaw
+                        : playerVisual != null ? playerVisual.localEulerAngles.y : targetFacingYaw;
+                    combatFacingLocked = true;
+                }
+                SetCombatParameters(true, combatController.CurrentAttackVariant);
+                return;
+            }
+
+            ClearCombatAnimation();
+        }
+
+        private void ClearCombatAnimation()
+        {
+            combatFacingLocked = false;
+            SetCombatParameters(false, QusapAttackVariant.None);
+        }
+
+        private void SetCombatParameters(bool active, QusapAttackVariant variant)
+        {
+            if (!HasValidAnimatorController(animator))
+                return;
+            if (hasCombatAnimatingParameter)
+                animator.SetBool(CombatAnimatingParameter, active);
+            if (hasAttackVariantParameter)
+                animator.SetInteger(AttackVariantParameter, (int)variant);
+        }
+
+        private static bool IsAnimatedWeakKick(QusapAttackVariant variant)
+        {
+            return variant == QusapAttackVariant.WeakKickGround
+                || variant == QusapAttackVariant.WeakKickAir;
+        }
+
+        private static bool IsAnimatedCombatKick(QusapAttackVariant variant)
+        {
+            return IsAnimatedWeakKick(variant)
+                || variant == QusapAttackVariant.StrongKickGround
+                || variant == QusapAttackVariant.StrongKickAir;
+        }
+
+        private bool EnsureAnimatorReady()
+        {
+            if (HasValidAnimatorController(animator)
+                && playerVisual != null && playerVisual.gameObject.activeInHierarchy)
+                return true;
+            return TryResolveAnimator();
+        }
+
+        private bool TryResolveAnimator()
+        {
+            Animator[] candidates = GetComponentsInChildren<Animator>(true)
+                .Where(IsValidVisualAnimator).ToArray();
+            if (candidates.Length == 1)
+            {
+                animator = candidates[0];
+                playerVisual = DirectChildUnderRoot(animator.transform);
+                invalidAnimatorReported = false;
+                return true;
+            }
+
+            if (!invalidAnimatorReported)
+            {
+                Animator[] found = GetComponentsInChildren<Animator>(true);
+                string inventory = found.Length == 0
+                    ? "ningún Animator"
+                    : string.Join("; ", found.Select(item =>
+                        $"{HierarchyPath(item.transform)} [active={item.gameObject.activeInHierarchy}, "
+                        + $"enabled={item.enabled}, controller="
+                        + $"{(item.runtimeAnimatorController != null ? item.runtimeAnimatorController.name : "null")}, "
+                        + $"avatar={(item.avatar != null ? item.avatar.name : "null")}, "
+                        + $"avatarValid={(item.avatar != null && item.avatar.isValid)}]"));
+                Debug.LogError(
+                    $"{nameof(QusapAnimationDriver)} on '{HierarchyPath(transform)}' requires exactly one active, "
+                    + "enabled Animator with a RuntimeAnimatorController and valid Avatar under the active "
+                    + $"PlayerVisual. Valid candidates: {candidates.Length}. Found: {inventory}.",
+                    this);
+                invalidAnimatorReported = true;
+            }
+            return false;
+        }
+
+        private bool IsValidVisualAnimator(Animator candidate)
+        {
+            if (!HasValidAnimatorController(candidate) || candidate.avatar == null
+                || !candidate.avatar.isValid || !candidate.gameObject.activeInHierarchy)
+                return false;
+            Transform visualRoot = DirectChildUnderRoot(candidate.transform);
+            return visualRoot != null && visualRoot.name == "PlayerVisual"
+                && visualRoot.gameObject.activeInHierarchy;
+        }
+
+        private static bool HasValidAnimatorController(Animator candidate)
+        {
+            return candidate != null && candidate.enabled
+                && candidate.runtimeAnimatorController != null;
+        }
+
+        private Transform DirectChildUnderRoot(Transform descendant)
+        {
+            if (descendant == null)
+                return null;
+            Transform current = descendant;
+            while (current.parent != null && current.parent != transform)
+                current = current.parent;
+            return current.parent == transform ? current : null;
+        }
+
+        private static string HierarchyPath(Transform item)
+        {
+            if (item == null)
+                return "<null>";
+            string path = item.name;
+            for (Transform parent = item.parent; parent != null; parent = parent.parent)
+                path = parent.name + "/" + path;
+            return path;
         }
 
         private void UpdateWallJumpVisual()

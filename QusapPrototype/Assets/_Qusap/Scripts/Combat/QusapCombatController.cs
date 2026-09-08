@@ -13,6 +13,8 @@ namespace Qusap
     [RequireComponent(typeof(QusapHitstunController))]
     public sealed class QusapCombatController : MonoBehaviour
     {
+        private const int MaxComboCommandsPerFixedUpdate = 64;
+
         [SerializeField] private bool combatAllowed = true;
         [SerializeField] private float facingInputThreshold = 0.05f;
         [SerializeField, Range(-1, 1)] private int initialFacingDirection = 1;
@@ -28,6 +30,11 @@ namespace Qusap
         [SerializeField] private QusapAirAttackData strongKickAir = QusapAirAttackData.CreateStrongKickAir();
         [SerializeField] private QusapAirAttackData diveHeadbuttAir = QusapAirAttackData.CreateDiveHeadbuttAir();
 
+        [Header("Combo recognition - input only")]
+        [SerializeField] private bool comboRecognitionEnabled = true;
+        [SerializeField] private bool logRecognizedCombos = true;
+        [SerializeField] private QusapComboDefinition[] comboDefinitions = Array.Empty<QusapComboDefinition>();
+
         private Rigidbody rb;
         private QusapInputReader inputReader;
         private QusapDashMotor dashMotor;
@@ -41,6 +48,8 @@ namespace Qusap
         private bool diveConnected;
         private bool wasGrounded;
         private float diveHorizontalVelocity;
+        private QusapComboSequenceMatcher comboMatcher;
+        private QusapComboMatchResult lastComboMatchResult;
 
         // Legacy events remain available to avoid breaking existing integrations.
         public event Action<QusapAttackType> AttackStarted;
@@ -53,6 +62,7 @@ namespace Qusap
         public event Action<QusapAttackVariant> AttackVariantStarted;
         public event Action<QusapAttackVariant, QusapAttackPhase> AttackPhaseChanged;
         public event Action<QusapAttackVariant, bool> AttackEnded;
+        public event Action<QusapComboId> ComboCompleted;
 
         public bool CombatAllowed
         {
@@ -63,6 +73,7 @@ namespace Qusap
                 if (!combatAllowed)
                 {
                     CancelCurrentAttack(false);
+                    ResetComboRecognition();
                 }
             }
         }
@@ -75,6 +86,9 @@ namespace Qusap
         public int AttackDirection => attackDirection;
         public QusapHitReceiver HitReceiver { get; private set; }
         public bool DiveHeadbuttAvailable { get; private set; } = true;
+        public bool ComboRecognitionEnabled => comboRecognitionEnabled;
+        public QusapComboId? LastCompletedCombo { get; private set; }
+        public int ActiveComboCandidateCount => comboMatcher?.ActiveCandidateCount ?? 0;
         public bool BlocksDash => IsAttacking
             && CurrentAttackVariant == QusapAttackVariant.DiveHeadbuttAir
             && (diveHeadbuttAir.BlockDash || landedDuringAirAttack);
@@ -87,6 +101,7 @@ namespace Qusap
             dashMotor = GetComponent<QusapDashMotor>();
             groundSensor = GetComponent<QusapGroundSensor>();
             hitstunController = GetComponent<QusapHitstunController>();
+            InitializeComboRecognition();
             HitReceiver = GetComponent<QusapHitReceiver>();
             FacingDirection = initialFacingDirection < 0 ? -1 : 1;
             wasGrounded = groundSensor != null && groundSensor.IsGrounded;
@@ -118,6 +133,7 @@ namespace Qusap
         private void OnDisable()
         {
             CancelCurrentAttack(false);
+            ResetComboRecognition();
         }
 
         private void FixedUpdate()
@@ -129,6 +145,8 @@ namespace Qusap
             bool weakKickPressed = inputReader.ConsumeWeakKickPressed();
             bool strongKickPressed = inputReader.ConsumeStrongKickPressed();
             bool headbuttPressed = inputReader.ConsumeHeadbuttPressed();
+
+            ProcessPendingComboCommands();
 
             if (hitstunController != null && hitstunController.IsInHitstun)
             {
@@ -280,8 +298,84 @@ namespace Qusap
         public void ResetCombatState()
         {
             CancelCurrentAttack(true);
+            ResetComboRecognition();
             DiveHeadbuttAvailable = true;
             wasGrounded = groundSensor != null && groundSensor.IsGrounded;
+        }
+
+        public void ResetComboRecognition()
+        {
+            comboMatcher?.Reset();
+            lastComboMatchResult = default;
+            LastCompletedCombo = null;
+            inputReader?.DiscardPendingCombatCommands();
+        }
+
+        private void InitializeComboRecognition()
+        {
+            System.Collections.Generic.IEnumerable<QusapComboDefinition> definitions = comboDefinitions;
+            if (comboDefinitions == null || comboDefinitions.Length == 0)
+            {
+                definitions = QusapComboDefinition.CreateDefaultDefinitions();
+            }
+
+            try
+            {
+                comboMatcher = new QusapComboSequenceMatcher(definitions);
+            }
+            catch (ArgumentException exception)
+            {
+                Debug.LogError(
+                    $"{nameof(QusapCombatController)} on '{gameObject.name}' has invalid combo definitions. "
+                    + $"Default definitions will be used. {exception.Message}",
+                    this);
+                comboMatcher = new QusapComboSequenceMatcher(
+                    QusapComboDefinition.CreateDefaultDefinitions());
+            }
+
+            lastComboMatchResult = default;
+            LastCompletedCombo = null;
+        }
+
+        private void ProcessPendingComboCommands()
+        {
+            bool blocked = !comboRecognitionEnabled
+                || !combatAllowed
+                || (hitstunController != null && hitstunController.IsInHitstun)
+                || (dashMotor != null && dashMotor.IsDashing);
+            if (blocked)
+            {
+                ResetComboRecognition();
+                return;
+            }
+
+            int processedCount = 0;
+            while (processedCount < MaxComboCommandsPerFixedUpdate
+                && inputReader.TryConsumeCombatCommand(out QusapCombatCommandPress press))
+            {
+                processedCount++;
+                if (press.Command == QusapCombatCommand.Parry)
+                {
+                    continue;
+                }
+
+                lastComboMatchResult = comboMatcher.ProcessPress(
+                    press.Command,
+                    press.PressId,
+                    press.Timestamp);
+                if (!lastComboMatchResult.Completed || !lastComboMatchResult.CompletedComboId.HasValue)
+                {
+                    continue;
+                }
+
+                QusapComboId completedCombo = lastComboMatchResult.CompletedComboId.Value;
+                LastCompletedCombo = completedCombo;
+                ComboCompleted?.Invoke(completedCombo);
+                if (logRecognizedCombos)
+                {
+                    Debug.Log($"[Qusap Combo] {gameObject.name} completed {completedCombo}", this);
+                }
+            }
         }
 
         internal void NotifyAttackHit(QusapHitReceiver receiver)

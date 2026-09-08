@@ -291,6 +291,19 @@ namespace Qusap
             return combatCommandBuffer.TryDequeue(out press);
         }
 
+        public void DiscardPendingCombatCommands()
+        {
+            combatCommandBuffer?.Clear();
+        }
+
+        internal void EnqueueCombatCommand(QusapCombatCommand command, double timestamp)
+        {
+            if (!gameplayInputBlocked)
+            {
+                combatCommandBuffer?.Enqueue(command, timestamp);
+            }
+        }
+
         public void SetLocalPlayerSlot(QusapLocalPlayerSlot slot)
         {
             if (Application.isPlaying && runtimeActionAsset != null)
@@ -379,7 +392,7 @@ namespace Qusap
             }
 
             weakKickPressed = true;
-            combatCommandBuffer.Enqueue(QusapCombatCommand.BodyAttack, context.time);
+            EnqueueCombatCommand(QusapCombatCommand.BodyAttack, context.time);
         }
 
         private void HandleStrongKickPerformed(InputAction.CallbackContext context)
@@ -390,7 +403,7 @@ namespace Qusap
             }
 
             strongKickPressed = true;
-            combatCommandBuffer.Enqueue(QusapCombatCommand.WeaponLight, context.time);
+            EnqueueCombatCommand(QusapCombatCommand.WeaponLight, context.time);
         }
 
         private void HandleHeadbuttPerformed(InputAction.CallbackContext context)
@@ -401,23 +414,17 @@ namespace Qusap
             }
 
             headbuttPressed = true;
-            combatCommandBuffer.Enqueue(QusapCombatCommand.Headbutt, context.time);
+            EnqueueCombatCommand(QusapCombatCommand.Headbutt, context.time);
         }
 
         private void HandleWeaponStrongPerformed(InputAction.CallbackContext context)
         {
-            if (!gameplayInputBlocked)
-            {
-                combatCommandBuffer.Enqueue(QusapCombatCommand.WeaponStrong, context.time);
-            }
+            EnqueueCombatCommand(QusapCombatCommand.WeaponStrong, context.time);
         }
 
         private void HandleParryPerformed(InputAction.CallbackContext context)
         {
-            if (!gameplayInputBlocked)
-            {
-                combatCommandBuffer.Enqueue(QusapCombatCommand.Parry, context.time);
-            }
+            EnqueueCombatCommand(QusapCombatCommand.Parry, context.time);
         }
     }
 }

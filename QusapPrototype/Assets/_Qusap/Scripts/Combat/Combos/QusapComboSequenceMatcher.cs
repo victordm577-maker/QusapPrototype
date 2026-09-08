@@ -42,7 +42,48 @@ namespace Qusap
         public int ActiveCandidateCount => candidates.Count;
         public bool HasActiveCandidates => candidates.Count > 0;
 
+        internal bool HasActiveCandidate(QusapComboId comboId)
+        {
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].Definition.ComboId == comboId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public QusapComboMatchResult ProcessPress(
+            QusapCombatCommand command,
+            ulong pressId,
+            double timestamp)
+        {
+            Evaluation evaluation = EvaluatePress(command, pressId, timestamp);
+            hasProcessedPress = evaluation.HasProcessedPress;
+            lastProcessedPressId = evaluation.LastProcessedPressId;
+            hasAcceptedTimestamp = evaluation.HasAcceptedTimestamp;
+            lastAcceptedTimestamp = evaluation.LastAcceptedTimestamp;
+            candidates.Clear();
+            candidates.AddRange(evaluation.Candidates);
+            return evaluation.Result;
+        }
+
+        public QusapComboMatchResult PreviewPress(
+            QusapCombatCommand command,
+            ulong pressId,
+            double timestamp)
+        {
+            return EvaluatePress(command, pressId, timestamp).Result;
+        }
+
+        public void Reset()
+        {
+            candidates.Clear();
+        }
+
+        private Evaluation EvaluatePress(
             QusapCombatCommand command,
             ulong pressId,
             double timestamp)
@@ -54,24 +95,42 @@ namespace Qusap
 
             if (hasProcessedPress && pressId <= lastProcessedPressId)
             {
-                return Result(QusapComboMatchFlags.DuplicateOrStalePressIgnored);
+                return Evaluation.Unchanged(
+                    Result(QusapComboMatchFlags.DuplicateOrStalePressIgnored, candidates),
+                    candidates,
+                    hasProcessedPress,
+                    lastProcessedPressId,
+                    hasAcceptedTimestamp,
+                    lastAcceptedTimestamp);
             }
 
-            hasProcessedPress = true;
-            lastProcessedPressId = pressId;
+            bool evaluatedHasProcessedPress = true;
+            ulong evaluatedLastProcessedPressId = pressId;
 
             if (double.IsNaN(timestamp) || double.IsInfinity(timestamp))
             {
-                return Result(QusapComboMatchFlags.InvalidTimestampIgnored);
+                return Evaluation.Unchanged(
+                    Result(QusapComboMatchFlags.InvalidTimestampIgnored, candidates),
+                    candidates,
+                    evaluatedHasProcessedPress,
+                    evaluatedLastProcessedPressId,
+                    hasAcceptedTimestamp,
+                    lastAcceptedTimestamp);
             }
 
             if (hasAcceptedTimestamp && timestamp < lastAcceptedTimestamp)
             {
-                return Result(QusapComboMatchFlags.BackwardTimestampIgnored);
+                return Evaluation.Unchanged(
+                    Result(QusapComboMatchFlags.BackwardTimestampIgnored, candidates),
+                    candidates,
+                    evaluatedHasProcessedPress,
+                    evaluatedLastProcessedPressId,
+                    hasAcceptedTimestamp,
+                    lastAcceptedTimestamp);
             }
 
-            hasAcceptedTimestamp = true;
-            lastAcceptedTimestamp = timestamp;
+            bool evaluatedHasAcceptedTimestamp = true;
+            double evaluatedLastAcceptedTimestamp = timestamp;
 
             bool hadCandidates = candidates.Count > 0;
             bool advanced = false;
@@ -116,7 +175,6 @@ namespace Qusap
 
             if (completedComboId.HasValue)
             {
-                candidates.Clear();
                 QusapComboMatchFlags completionFlags = QusapComboMatchFlags.Advanced
                     | QusapComboMatchFlags.Completed;
                 if (discarded)
@@ -124,8 +182,14 @@ namespace Qusap
                     completionFlags |= QusapComboMatchFlags.CandidatesDiscarded;
                 }
 
-                return new QusapComboMatchResult(
-                    completionFlags, completedComboId.Value, Array.Empty<QusapComboId>());
+                return new Evaluation(
+                    new QusapComboMatchResult(
+                        completionFlags, completedComboId.Value, Array.Empty<QusapComboId>()),
+                    Array.Empty<Candidate>(),
+                    evaluatedHasProcessedPress,
+                    evaluatedLastProcessedPressId,
+                    evaluatedHasAcceptedTimestamp,
+                    evaluatedLastAcceptedTimestamp);
             }
 
             bool started = false;
@@ -142,7 +206,6 @@ namespace Qusap
                 advanced = true;
                 if (definition.StepCount == 1)
                 {
-                    candidates.Clear();
                     QusapComboMatchFlags singleStepFlags = QusapComboMatchFlags.Advanced
                         | QusapComboMatchFlags.Completed;
                     if (discarded)
@@ -150,15 +213,18 @@ namespace Qusap
                         singleStepFlags |= QusapComboMatchFlags.CandidatesDiscarded;
                     }
 
-                    return new QusapComboMatchResult(
-                        singleStepFlags, definition.ComboId, Array.Empty<QusapComboId>());
+                    return new Evaluation(
+                        new QusapComboMatchResult(
+                            singleStepFlags, definition.ComboId, Array.Empty<QusapComboId>()),
+                        Array.Empty<Candidate>(),
+                        evaluatedHasProcessedPress,
+                        evaluatedLastProcessedPressId,
+                        evaluatedHasAcceptedTimestamp,
+                        evaluatedLastAcceptedTimestamp);
                 }
 
                 survivors.Add(new Candidate(definition, 1, timestamp));
             }
-
-            candidates.Clear();
-            candidates.AddRange(survivors);
 
             QusapComboMatchFlags flags = QusapComboMatchFlags.None;
             if (advanced)
@@ -171,7 +237,7 @@ namespace Qusap
                 flags |= QusapComboMatchFlags.CandidatesDiscarded;
             }
 
-            if (candidates.Count > 0)
+            if (survivors.Count > 0)
             {
                 flags |= QusapComboMatchFlags.CandidatesRemain;
             }
@@ -181,25 +247,28 @@ namespace Qusap
                 flags |= QusapComboMatchFlags.SequenceRestarted;
             }
 
-            return Result(flags);
+            return new Evaluation(
+                Result(flags, survivors),
+                survivors.ToArray(),
+                evaluatedHasProcessedPress,
+                evaluatedLastProcessedPressId,
+                evaluatedHasAcceptedTimestamp,
+                evaluatedLastAcceptedTimestamp);
         }
 
-        public void Reset()
+        private static QusapComboMatchResult Result(
+            QusapComboMatchFlags flags,
+            IReadOnlyList<Candidate> resultCandidates)
         {
-            candidates.Clear();
-        }
-
-        private QusapComboMatchResult Result(QusapComboMatchFlags flags)
-        {
-            if (candidates.Count > 0)
+            if (resultCandidates.Count > 0)
             {
                 flags |= QusapComboMatchFlags.CandidatesRemain;
             }
 
             List<QusapComboId> activeIds = new();
-            for (int i = 0; i < candidates.Count; i++)
+            for (int i = 0; i < resultCandidates.Count; i++)
             {
-                QusapComboId id = candidates[i].Definition.ComboId;
+                QusapComboId id = resultCandidates[i].Definition.ComboId;
                 if (!activeIds.Contains(id))
                 {
                     activeIds.Add(id);
@@ -207,6 +276,55 @@ namespace Qusap
             }
 
             return new QusapComboMatchResult(flags, null, activeIds.ToArray());
+        }
+
+        private readonly struct Evaluation
+        {
+            public Evaluation(
+                QusapComboMatchResult result,
+                Candidate[] candidates,
+                bool hasProcessedPress,
+                ulong lastProcessedPressId,
+                bool hasAcceptedTimestamp,
+                double lastAcceptedTimestamp)
+            {
+                Result = result;
+                Candidates = candidates;
+                HasProcessedPress = hasProcessedPress;
+                LastProcessedPressId = lastProcessedPressId;
+                HasAcceptedTimestamp = hasAcceptedTimestamp;
+                LastAcceptedTimestamp = lastAcceptedTimestamp;
+            }
+
+            public QusapComboMatchResult Result { get; }
+            public Candidate[] Candidates { get; }
+            public bool HasProcessedPress { get; }
+            public ulong LastProcessedPressId { get; }
+            public bool HasAcceptedTimestamp { get; }
+            public double LastAcceptedTimestamp { get; }
+
+            public static Evaluation Unchanged(
+                QusapComboMatchResult result,
+                IReadOnlyList<Candidate> candidates,
+                bool hasProcessedPress,
+                ulong lastProcessedPressId,
+                bool hasAcceptedTimestamp,
+                double lastAcceptedTimestamp)
+            {
+                Candidate[] copiedCandidates = new Candidate[candidates.Count];
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    copiedCandidates[i] = candidates[i];
+                }
+
+                return new Evaluation(
+                    result,
+                    copiedCandidates,
+                    hasProcessedPress,
+                    lastProcessedPressId,
+                    hasAcceptedTimestamp,
+                    lastAcceptedTimestamp);
+            }
         }
 
         private static void ValidateNoDuplicate(

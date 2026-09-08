@@ -210,6 +210,118 @@ namespace Qusap.Tests
         }
 
         [Test]
+        public void PreviewPressReturnsSameResultAsCommittedPress()
+        {
+            Press(QusapCombatCommand.BodyAttack, 0d);
+
+            QusapComboMatchResult preview = matcher.PreviewPress(
+                QusapCombatCommand.WeaponLight, nextPressId, 0.1d);
+            QusapComboMatchResult committed = Press(QusapCombatCommand.WeaponLight, 0.1d);
+
+            AssertEquivalent(preview, committed);
+        }
+
+        [Test]
+        public void PreviewPressDoesNotAdvanceCandidates()
+        {
+            QusapComboMatchResult preview = matcher.PreviewPress(
+                QusapCombatCommand.BodyAttack, nextPressId, 0d);
+
+            Assert.That(preview.Advanced, Is.True);
+            Assert.That(matcher.HasActiveCandidates, Is.False);
+            Assert.That(matcher.ActiveCandidateCount, Is.Zero);
+        }
+
+        [Test]
+        public void PreviewPressDoesNotConsumePressId()
+        {
+            QusapComboMatchResult preview = matcher.PreviewPress(
+                QusapCombatCommand.BodyAttack, 25, 0d);
+            QusapComboMatchResult committed = matcher.ProcessPress(
+                QusapCombatCommand.BodyAttack, 25, 0d);
+
+            AssertEquivalent(preview, committed);
+            Assert.That(
+                committed.Flags & QusapComboMatchFlags.DuplicateOrStalePressIgnored,
+                Is.EqualTo(QusapComboMatchFlags.None));
+        }
+
+        [Test]
+        public void RepeatedPreviewDoesNotMutateMatcher()
+        {
+            QusapComboMatchResult first = matcher.PreviewPress(
+                QusapCombatCommand.WeaponLight, 50, 2d);
+            QusapComboMatchResult second = matcher.PreviewPress(
+                QusapCombatCommand.WeaponLight, 50, 2d);
+            QusapComboMatchResult committed = matcher.ProcessPress(
+                QusapCombatCommand.WeaponLight, 50, 2d);
+
+            AssertEquivalent(first, second);
+            AssertEquivalent(first, committed);
+        }
+
+        [Test]
+        public void PreviewCompletionDoesNotResetMatcher()
+        {
+            Press(QusapCombatCommand.BodyAttack, 0d);
+            Press(QusapCombatCommand.WeaponLight, 0.1d);
+
+            QusapComboMatchResult preview = matcher.PreviewPress(
+                QusapCombatCommand.BodyAttack, nextPressId, 0.2d);
+
+            AssertCompleted(preview, QusapComboId.Launch);
+            Assert.That(matcher.HasActiveCandidates, Is.True);
+            Assert.That(matcher.ActiveCandidateCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void PressCanBeCommittedAfterCompletionPreview()
+        {
+            Press(QusapCombatCommand.BodyAttack, 0d);
+            Press(QusapCombatCommand.WeaponLight, 0.1d);
+            matcher.PreviewPress(QusapCombatCommand.BodyAttack, nextPressId, 0.2d);
+
+            QusapComboMatchResult committed = Press(QusapCombatCommand.BodyAttack, 0.2d);
+
+            AssertCompleted(committed, QusapComboId.Launch);
+            Assert.That(matcher.HasActiveCandidates, Is.False);
+        }
+
+        [Test]
+        public void PreviewWithBackwardTimestampDoesNotMutateMatcher()
+        {
+            matcher.ProcessPress(QusapCombatCommand.BodyAttack, 10, 10d);
+
+            QusapComboMatchResult preview = matcher.PreviewPress(
+                QusapCombatCommand.WeaponLight, 11, 9d);
+            QusapComboMatchResult committed = matcher.ProcessPress(
+                QusapCombatCommand.WeaponLight, 11, 10.1d);
+
+            Assert.That(
+                preview.Flags & QusapComboMatchFlags.BackwardTimestampIgnored,
+                Is.Not.EqualTo(QusapComboMatchFlags.None));
+            Assert.That(committed.Advanced, Is.True);
+            Assert.That(committed.HasActiveCandidate(QusapComboId.Launch), Is.True);
+        }
+
+        [Test]
+        public void PreviewWithRepeatedPressIdDoesNotMutateMatcher()
+        {
+            matcher.ProcessPress(QusapCombatCommand.BodyAttack, 10, 0d);
+
+            QusapComboMatchResult preview = matcher.PreviewPress(
+                QusapCombatCommand.WeaponLight, 10, 0.1d);
+            QusapComboMatchResult committed = matcher.ProcessPress(
+                QusapCombatCommand.WeaponLight, 11, 0.1d);
+
+            Assert.That(
+                preview.Flags & QusapComboMatchFlags.DuplicateOrStalePressIgnored,
+                Is.Not.EqualTo(QusapComboMatchFlags.None));
+            Assert.That(committed.Advanced, Is.True);
+            Assert.That(committed.HasActiveCandidate(QusapComboId.Launch), Is.True);
+        }
+
+        [Test]
         public void OffensiveComboCannotContainParry()
         {
             Assert.Throws<ArgumentException>(() => new QusapComboDefinition(
@@ -322,6 +434,15 @@ namespace Qusap.Tests
         {
             Assert.That(result.Completed, Is.True);
             Assert.That(result.CompletedComboId, Is.EqualTo(expected));
+        }
+
+        private static void AssertEquivalent(
+            QusapComboMatchResult expected,
+            QusapComboMatchResult actual)
+        {
+            Assert.That(actual.Flags, Is.EqualTo(expected.Flags));
+            Assert.That(actual.CompletedComboId, Is.EqualTo(expected.CompletedComboId));
+            Assert.That(actual.ActiveComboIds, Is.EqualTo(expected.ActiveComboIds));
         }
     }
 }

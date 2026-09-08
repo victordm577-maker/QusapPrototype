@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace Qusap
 {
@@ -34,6 +36,8 @@ namespace Qusap
         [SerializeField] private bool comboRecognitionEnabled = true;
         [SerializeField] private bool logRecognizedCombos = true;
         [SerializeField] private QusapComboDefinition[] comboDefinitions = Array.Empty<QusapComboDefinition>();
+        [SerializeField] private QusapFinisherParrySettings finisherParrySettings =
+            QusapFinisherParrySettings.CreateDefault();
 
         private Rigidbody rb;
         private QusapInputReader inputReader;
@@ -56,6 +60,18 @@ namespace Qusap
         private ulong pendingComboAttackExecutionId;
         private bool pendingComboStartsNewSequence;
         private QusapHitReceiver comboTarget;
+        private readonly List<QusapCombatController> incomingFinishers = new();
+        private readonly Queue<PendingParryResolution> pendingParryResolutions = new();
+        private QusapFinisherParryStateMachine finisherDefense;
+        private QusapCombatController armedFinisherDefender;
+        private bool inputEventsSubscribed;
+        private bool suppressFinisherReset;
+        private bool parryFailurePending;
+        private bool hasHandledParryPress;
+        private ulong lastHandledParryPressId;
+        private bool finisherWindowEventEmitted;
+        private bool finisherReadyEventEmitted;
+        private bool finisherParriedEventEmitted;
 
         // Legacy events remain available to avoid breaking existing integrations.
         public event Action<QusapAttackType> AttackStarted;
@@ -70,6 +86,11 @@ namespace Qusap
         public event Action<QusapAttackVariant, bool> AttackEnded;
         public event Action<QusapComboId> ComboCompleted;
         public event Action<QusapComboId, QusapHitReceiver> FinisherArmed;
+        public event Action<QusapComboId, QusapHitReceiver> FinisherParryWindowOpened;
+        public event Action<QusapComboId, QusapHitReceiver> FinisherParried;
+        public event Action<QusapComboId, QusapHitReceiver> FinisherReadyToResolve;
+        public event Action<QusapCombatController, QusapComboId> ParrySucceeded;
+        public event Action<QusapParryAttemptOutcome> ParryFailed;
 
         public bool CombatAllowed
         {
@@ -79,6 +100,7 @@ namespace Qusap
                 combatAllowed = value;
                 if (!combatAllowed)
                 {
+                    CancelIncomingFinishers();
                     CancelCurrentAttack(false);
                     ResetComboRecognition();
                 }
@@ -98,6 +120,21 @@ namespace Qusap
         public bool HasArmedFinisher { get; private set; }
         public QusapComboId? ArmedFinisherCombo { get; private set; }
         public QusapHitReceiver ArmedFinisherTarget { get; private set; }
+        public QusapFinisherDefensePhase FinisherDefensePhase =>
+            finisherDefense?.Phase ?? QusapFinisherDefensePhase.None;
+        public bool IsParryWindowOpen => finisherDefense?.IsWindowOpen ?? false;
+        public bool HasFinisherReadyToResolve =>
+            HasArmedFinisher && (finisherDefense?.IsReadyToResolve ?? false);
+        public double ParryWindowOpensAt => finisherDefense?.WindowOpensAt ?? 0d;
+        public double ParryWindowClosesAt => finisherDefense?.WindowClosesAt ?? 0d;
+        public int IncomingFinisherCount
+        {
+            get
+            {
+                CleanupIncomingFinishers();
+                return incomingFinishers.Count;
+            }
+        }
         public int ActiveComboCandidateCount => comboMatcher?.ActiveCandidateCount ?? 0;
         public bool BlocksDash => IsAttacking
             && CurrentAttackVariant == QusapAttackVariant.DiveHeadbuttAir
@@ -106,11 +143,13 @@ namespace Qusap
         private void Awake()
         {
             ValidateAttackData();
+            ValidateFinisherParrySettings();
             rb = GetComponent<Rigidbody>();
             inputReader = GetComponent<QusapInputReader>();
             dashMotor = GetComponent<QusapDashMotor>();
             groundSensor = GetComponent<QusapGroundSensor>();
             hitstunController = GetComponent<QusapHitstunController>();
+            finisherDefense = new QusapFinisherParryStateMachine();
             InitializeComboRecognition();
             HitReceiver = GetComponent<QusapHitReceiver>();
             HitReceiver.HitReceived += HandleOwnerHitReceived;
@@ -138,17 +177,33 @@ namespace Qusap
         {
             facingInputThreshold = Mathf.Max(facingInputThreshold, 0f);
             initialFacingDirection = initialFacingDirection < 0 ? -1 : 1;
+            ValidateFinisherParrySettings();
             ValidateAttackData();
+        }
+
+        private void ValidateFinisherParrySettings()
+        {
+            finisherParrySettings ??= QusapFinisherParrySettings.CreateDefault();
+            finisherParrySettings.ValidateSerializedValues();
+        }
+
+        private void OnEnable()
+        {
+            SubscribeInputEvents();
         }
 
         private void OnDisable()
         {
+            UnsubscribeInputEvents();
+            CancelIncomingFinishers();
             CancelCurrentAttack(false);
             ResetComboRecognition();
         }
 
         private void OnDestroy()
         {
+            UnsubscribeInputEvents();
+            CancelIncomingFinishers();
             if (HitReceiver != null)
             {
                 HitReceiver.HitReceived -= HandleOwnerHitReceived;
@@ -157,6 +212,18 @@ namespace Qusap
 
         private void FixedUpdate()
         {
+            ProcessPendingParryResolutions();
+            if (HasArmedFinisher && dashMotor != null && dashMotor.IsDashing)
+            {
+                ResetComboRecognition();
+            }
+
+            if (BlocksOffenseForFinisher())
+            {
+                inputReader.DiscardPendingCombatCommands();
+            }
+
+            UpdateFinisherDefense(InputState.currentTime);
             UpdateFacingDirection();
             bool grounded = groundSensor != null && groundSensor.IsGrounded;
             UpdateLandingState(grounded);
@@ -213,6 +280,7 @@ namespace Qusap
         {
             if (!combatAllowed
                 || IsAttacking
+                || BlocksOffenseForFinisher()
                 || (hitstunController != null && hitstunController.IsInHitstun)
                 || dashMotor == null
                 || dashMotor.IsDashing)
@@ -332,6 +400,11 @@ namespace Qusap
 
         public void ResetComboRecognition()
         {
+            if (!suppressFinisherReset)
+            {
+                CancelOutgoingFinisher();
+            }
+
             comboMatcher?.Reset();
             lastComboMatchResult = default;
             hasPendingComboStep = false;
@@ -344,6 +417,8 @@ namespace Qusap
             ArmedFinisherTarget = null;
             LastCompletedCombo = null;
             inputReader?.DiscardPendingCombatCommands();
+            pendingParryResolutions.Clear();
+            parryFailurePending = false;
         }
 
         private void InitializeComboRecognition()
@@ -378,6 +453,7 @@ namespace Qusap
             ArmedFinisherCombo = null;
             ArmedFinisherTarget = null;
             LastCompletedCombo = null;
+            finisherDefense?.Reset();
         }
 
         private bool ProcessPendingComboCommands(bool grounded)
@@ -389,6 +465,12 @@ namespace Qusap
             if (blocked)
             {
                 ResetComboRecognition();
+                return false;
+            }
+
+            if (BlocksOffenseForFinisher())
+            {
+                inputReader.DiscardPendingCombatCommands();
                 return false;
             }
 
@@ -568,10 +650,20 @@ namespace Qusap
 
         private void ArmFinisher(QusapComboId comboId, QusapHitReceiver target)
         {
+            CancelOutgoingFinisher();
             HasArmedFinisher = true;
             ArmedFinisherCombo = comboId;
             ArmedFinisherTarget = target;
             LastCompletedCombo = comboId;
+            finisherWindowEventEmitted = false;
+            finisherReadyEventEmitted = false;
+            finisherParriedEventEmitted = false;
+            finisherDefense.Arm(
+                comboId,
+                InputState.currentTime,
+                finisherParrySettings);
+            armedFinisherDefender = target.GetComponent<QusapCombatController>();
+            armedFinisherDefender?.RegisterIncomingFinisher(this);
             FinisherArmed?.Invoke(comboId, target);
             ComboCompleted?.Invoke(comboId);
 
@@ -583,9 +675,435 @@ namespace Qusap
             }
         }
 
+        public bool TryConsumeReadyFinisher(
+            out QusapComboId comboId,
+            out QusapHitReceiver target)
+        {
+            if (!HasFinisherReadyToResolve
+                || !ArmedFinisherCombo.HasValue
+                || !IsValidFinisherTarget(ArmedFinisherTarget))
+            {
+                comboId = default;
+                target = null;
+                if (HasArmedFinisher && !IsValidFinisherTarget(ArmedFinisherTarget))
+                {
+                    CancelOutgoingFinisher();
+                }
+
+                return false;
+            }
+
+            comboId = ArmedFinisherCombo.Value;
+            target = ArmedFinisherTarget;
+            UnregisterFromFinisherDefender();
+            HasArmedFinisher = false;
+            ArmedFinisherCombo = null;
+            ArmedFinisherTarget = null;
+            finisherDefense.Reset();
+            return true;
+        }
+
+        internal void UpdateFinisherDefense(double timestamp)
+        {
+            if (finisherDefense == null)
+            {
+                return;
+            }
+
+            if (HasArmedFinisher && !IsValidFinisherTarget(ArmedFinisherTarget))
+            {
+                CancelOutgoingFinisher();
+                return;
+            }
+
+            PublishFinisherTransition(finisherDefense.Advance(timestamp));
+        }
+
+        private void PublishFinisherTransition(QusapFinisherDefenseTransition transition)
+        {
+            if (!HasArmedFinisher
+                || !ArmedFinisherCombo.HasValue
+                || ArmedFinisherTarget == null)
+            {
+                return;
+            }
+
+            QusapComboId comboId = ArmedFinisherCombo.Value;
+            QusapHitReceiver target = ArmedFinisherTarget;
+            if (transition.WindowOpened && !finisherWindowEventEmitted)
+            {
+                finisherWindowEventEmitted = true;
+                FinisherParryWindowOpened?.Invoke(comboId, target);
+                if (logRecognizedCombos)
+                {
+                    Debug.Log(
+                        $"[Qusap Parry] {target.gameObject.name} parry window opened for {comboId} from {gameObject.name}",
+                        this);
+                }
+            }
+
+            if (transition.BecameReadyToResolve && !finisherReadyEventEmitted)
+            {
+                finisherReadyEventEmitted = true;
+                UnregisterFromFinisherDefender();
+                FinisherReadyToResolve?.Invoke(comboId, target);
+                if (logRecognizedCombos)
+                {
+                    Debug.Log(
+                        $"[Qusap Finisher] {gameObject.name} {comboId} ready to resolve against {target.gameObject.name}",
+                        this);
+                }
+            }
+        }
+
+        private void MarkFinisherParried(QusapCombatController defender)
+        {
+            if (finisherDefense == null
+                || finisherDefense.Phase != QusapFinisherDefensePhase.Parried
+                || !HasArmedFinisher
+                || !ArmedFinisherCombo.HasValue
+                || ArmedFinisherTarget == null)
+            {
+                return;
+            }
+
+            QusapComboId comboId = ArmedFinisherCombo.Value;
+            QusapHitReceiver target = ArmedFinisherTarget;
+            UnregisterFromFinisherDefender();
+            HasArmedFinisher = false;
+            ArmedFinisherCombo = null;
+            ArmedFinisherTarget = null;
+
+            if (!finisherParriedEventEmitted)
+            {
+                finisherParriedEventEmitted = true;
+                FinisherParried?.Invoke(comboId, target);
+            }
+
+            if (logRecognizedCombos)
+            {
+                Debug.Log(
+                    $"[Qusap Parry] {defender.gameObject.name} parried {comboId} from {gameObject.name}",
+                    this);
+            }
+        }
+
+        private void ApplySuccessfulParryVulnerability()
+        {
+            suppressFinisherReset = true;
+            try
+            {
+                hitstunController.EnterHitstun(
+                    (float)finisherParrySettings.SuccessfulParryAttackerVulnerabilityDuration);
+            }
+            finally
+            {
+                suppressFinisherReset = false;
+            }
+        }
+
+        private void CancelOutgoingFinisher()
+        {
+            if (finisherDefense == null)
+            {
+                return;
+            }
+
+            UnregisterFromFinisherDefender();
+            finisherDefense.Cancel();
+            HasArmedFinisher = false;
+            ArmedFinisherCombo = null;
+            ArmedFinisherTarget = null;
+        }
+
+        private void UnregisterFromFinisherDefender()
+        {
+            QusapCombatController defender = armedFinisherDefender;
+            armedFinisherDefender = null;
+            if (defender != null)
+            {
+                defender.UnregisterIncomingFinisher(this);
+            }
+        }
+
+        private bool BlocksOffenseForFinisher()
+        {
+            return finisherDefense != null
+                && (finisherDefense.Phase == QusapFinisherDefensePhase.Telegraph
+                    || finisherDefense.Phase == QusapFinisherDefensePhase.ParryWindow);
+        }
+
+        private static bool IsValidFinisherTarget(QusapHitReceiver target)
+        {
+            if (target == null
+                || !target.isActiveAndEnabled
+                || !target.gameObject.activeInHierarchy
+                || !target.AcceptsHits)
+            {
+                return false;
+            }
+
+            QusapCombatController targetCombat = target.GetComponent<QusapCombatController>();
+            return targetCombat == null || targetCombat.CombatAllowed;
+        }
+
+        private void SubscribeInputEvents()
+        {
+            if (inputEventsSubscribed || inputReader == null)
+            {
+                return;
+            }
+
+            inputReader.ParryPressed += HandleParryPressed;
+            inputEventsSubscribed = true;
+        }
+
+        private void UnsubscribeInputEvents()
+        {
+            if (!inputEventsSubscribed || inputReader == null)
+            {
+                return;
+            }
+
+            inputReader.ParryPressed -= HandleParryPressed;
+            inputEventsSubscribed = false;
+        }
+
+        private void RegisterIncomingFinisher(QusapCombatController attacker)
+        {
+            CleanupIncomingFinishers();
+            if (attacker != null && !incomingFinishers.Contains(attacker))
+            {
+                incomingFinishers.Add(attacker);
+            }
+        }
+
+        private void UnregisterIncomingFinisher(QusapCombatController attacker)
+        {
+            incomingFinishers.Remove(attacker);
+        }
+
+        private void CleanupIncomingFinishers()
+        {
+            for (int i = incomingFinishers.Count - 1; i >= 0; i--)
+            {
+                QusapCombatController attacker = incomingFinishers[i];
+                if (attacker == null || !attacker.IsIncomingOpportunityFor(this))
+                {
+                    incomingFinishers.RemoveAt(i);
+                }
+            }
+        }
+
+        private bool IsIncomingOpportunityFor(QusapCombatController defender)
+        {
+            if (defender == null
+                || !HasArmedFinisher
+                || ArmedFinisherTarget != defender.HitReceiver
+                || !isActiveAndEnabled
+                || !gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            return finisherDefense.Phase == QusapFinisherDefensePhase.Telegraph
+                || finisherDefense.Phase == QusapFinisherDefensePhase.ParryWindow;
+        }
+
+        private void CancelIncomingFinishers()
+        {
+            if (incomingFinishers.Count == 0)
+            {
+                return;
+            }
+
+            QusapCombatController[] attackers = incomingFinishers.ToArray();
+            incomingFinishers.Clear();
+            for (int i = 0; i < attackers.Length; i++)
+            {
+                QusapCombatController attacker = attackers[i];
+                if (attacker != null && attacker.armedFinisherDefender == this)
+                {
+                    attacker.CancelOutgoingFinisher();
+                }
+            }
+        }
+
+        private void HandleParryPressed(QusapCombatCommandPress press)
+        {
+            if (press.Command != QusapCombatCommand.Parry)
+            {
+                return;
+            }
+
+            if (hasHandledParryPress && press.PressId <= lastHandledParryPressId)
+            {
+                return;
+            }
+
+            hasHandledParryPress = true;
+            lastHandledParryPressId = press.PressId;
+            if (parryFailurePending)
+            {
+                return;
+            }
+
+            bool eligible = combatAllowed
+                && isActiveAndEnabled
+                && gameObject.activeInHierarchy
+                && !IsAttacking
+                && (dashMotor == null || !dashMotor.IsDashing)
+                && (hitstunController == null || !hitstunController.IsInHitstun);
+
+            CleanupIncomingFinishers();
+            if (!eligible)
+            {
+                QueueFailedParry(QusapParryAttemptOutcome.Ineligible);
+                return;
+            }
+
+            if (incomingFinishers.Count == 0)
+            {
+                QueueFailedParry(QusapParryAttemptOutcome.NoIncomingFinisher);
+                return;
+            }
+
+            QusapCombatController selected = SelectIncomingFinisher(press.Timestamp, requireOpenWindow: true);
+            if (selected == null)
+            {
+                selected = SelectIncomingFinisher(press.Timestamp, requireOpenWindow: false);
+            }
+
+            if (selected == null)
+            {
+                QueueFailedParry(QusapParryAttemptOutcome.NoIncomingFinisher);
+                return;
+            }
+
+            QusapComboId comboId = selected.ArmedFinisherCombo.Value;
+            QusapParryAttemptResult result = selected.finisherDefense.TryParry(
+                press.PressId,
+                press.Timestamp);
+            selected.PublishFinisherTransition(result.Transition);
+
+            if (result.Succeeded)
+            {
+                selected.MarkFinisherParried(this);
+                pendingParryResolutions.Enqueue(
+                    PendingParryResolution.Success(selected, comboId));
+                return;
+            }
+
+            if (result.Outcome == QusapParryAttemptOutcome.DuplicateOrStalePressIgnored
+                || result.Outcome == QusapParryAttemptOutcome.InvalidTimestampIgnored)
+            {
+                return;
+            }
+
+            QueueFailedParry(result.Outcome);
+        }
+
+        private QusapCombatController SelectIncomingFinisher(
+            double timestamp,
+            bool requireOpenWindow)
+        {
+            QusapCombatController selected = null;
+            for (int i = 0; i < incomingFinishers.Count; i++)
+            {
+                QusapCombatController candidate = incomingFinishers[i];
+                bool timestampInside = timestamp >= candidate.ParryWindowOpensAt
+                    && timestamp <= candidate.ParryWindowClosesAt;
+                if (requireOpenWindow != timestampInside)
+                {
+                    continue;
+                }
+
+                if (selected == null
+                    || candidate.ParryWindowClosesAt < selected.ParryWindowClosesAt
+                    || (candidate.ParryWindowClosesAt == selected.ParryWindowClosesAt
+                        && EntityId.ToULong(candidate.GetEntityId())
+                            < EntityId.ToULong(selected.GetEntityId())))
+                {
+                    selected = candidate;
+                }
+            }
+
+            return selected;
+        }
+
+        private void QueueFailedParry(QusapParryAttemptOutcome outcome)
+        {
+            parryFailurePending = true;
+            pendingParryResolutions.Enqueue(PendingParryResolution.Failure(outcome));
+        }
+
+        private void ProcessPendingParryResolutions()
+        {
+            while (pendingParryResolutions.Count > 0)
+            {
+                PendingParryResolution resolution = pendingParryResolutions.Dequeue();
+                if (resolution.Outcome == QusapParryAttemptOutcome.Success)
+                {
+                    if (resolution.Attacker != null)
+                    {
+                        resolution.Attacker.ApplySuccessfulParryVulnerability();
+                        ParrySucceeded?.Invoke(resolution.Attacker, resolution.ComboId);
+                    }
+
+                    continue;
+                }
+
+                pendingParryResolutions.Clear();
+                parryFailurePending = false;
+                ParryFailed?.Invoke(resolution.Outcome);
+                if (logRecognizedCombos)
+                {
+                    Debug.Log(
+                        $"[Qusap Parry] {gameObject.name} missed parry: {resolution.Outcome}",
+                        this);
+                }
+
+                hitstunController.EnterHitstun(
+                    (float)finisherParrySettings.FailedParryDefenderVulnerabilityDuration);
+                return;
+            }
+
+            parryFailurePending = false;
+        }
+
         private void HandleOwnerHitReceived(QusapHitInfo hitInfo)
         {
             ResetComboRecognition();
+        }
+
+        private readonly struct PendingParryResolution
+        {
+            private PendingParryResolution(
+                QusapParryAttemptOutcome outcome,
+                QusapCombatController attacker,
+                QusapComboId comboId)
+            {
+                Outcome = outcome;
+                Attacker = attacker;
+                ComboId = comboId;
+            }
+
+            public QusapParryAttemptOutcome Outcome { get; }
+            public QusapCombatController Attacker { get; }
+            public QusapComboId ComboId { get; }
+
+            public static PendingParryResolution Success(
+                QusapCombatController attacker,
+                QusapComboId comboId)
+            {
+                return new PendingParryResolution(
+                    QusapParryAttemptOutcome.Success, attacker, comboId);
+            }
+
+            public static PendingParryResolution Failure(QusapParryAttemptOutcome outcome)
+            {
+                return new PendingParryResolution(outcome, null, default);
+            }
         }
 
         private static bool TryGetLegacyAttack(

@@ -273,6 +273,7 @@ namespace Qusap.Tests
             harness.ProcessCombatCommands();
             Assert.That(armedCount, Is.EqualTo(1));
 
+            harness.Combat.ResetComboRecognition();
             harness.Arm(QusapComboId.Damage, harness.TargetA, 20d);
             Assert.That(armedCount, Is.EqualTo(2));
         }
@@ -327,7 +328,9 @@ namespace Qusap.Tests
             Harness harness = CreateHarness();
             TimedCommand[] sequence = Events(QusapComboId.Disarm);
             harness.ConfirmStep(sequence[0], harness.TargetA);
-            harness.Enqueue(QusapCombatCommand.Parry, Midpoint(sequence[0].Timestamp, sequence[1].Timestamp));
+            harness.EnqueueWithoutInputEvent(
+                QusapCombatCommand.Parry,
+                Midpoint(sequence[0].Timestamp, sequence[1].Timestamp));
             harness.Enqueue(sequence[1]);
             harness.ProcessCombatCommands();
             harness.EnterActive();
@@ -621,6 +624,15 @@ namespace Qusap.Tests
             public void Enqueue(QusapCombatCommand command, double timestamp)
             {
                 Input.EnqueueCombatCommand(command, timestamp);
+            }
+
+            public void EnqueueWithoutInputEvent(
+                QusapCombatCommand command,
+                double timestamp)
+            {
+                QusapCombatCommandBuffer buffer = GetField<QusapCombatCommandBuffer>(
+                    Input, "combatCommandBuffer");
+                buffer.Enqueue(command, timestamp);
             }
 
             public void Enqueue(TimedCommand command)

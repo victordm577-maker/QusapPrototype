@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Qusap.Tests
@@ -149,6 +151,84 @@ namespace Qusap.Tests
         }
 
         [Test]
+        public void ParryPressedEventCarriesGeneratedPress()
+        {
+            using TestInputReader input = new();
+            QusapCombatCommandPress observed = default;
+            input.Reader.ParryPressed += press => observed = press;
+
+            QusapCombatCommandPress generated = input.EnqueueCombatCommand(
+                QusapCombatCommand.Parry, 2d);
+
+            Assert.That(observed.Command, Is.EqualTo(QusapCombatCommand.Parry));
+            Assert.That(observed.PressId, Is.EqualTo(generated.PressId));
+        }
+
+        [Test]
+        public void ParryPressedEventPreservesTimestamp()
+        {
+            using TestInputReader input = new();
+            double observedTimestamp = 0d;
+            input.Reader.ParryPressed += press => observedTimestamp = press.Timestamp;
+            input.EnqueueCombatCommand(QusapCombatCommand.Parry, 123.456d);
+            Assert.That(observedTimestamp, Is.EqualTo(123.456d));
+        }
+
+        [Test]
+        public void ParryPressedEventUsesMainMonotonicIdSequence()
+        {
+            using TestInputReader input = new();
+            ulong observedId = 0;
+            QusapCombatCommandPress first = input.EnqueueCombatCommand(
+                QusapCombatCommand.BodyAttack, 1d);
+            input.Reader.ParryPressed += press => observedId = press.PressId;
+            input.EnqueueCombatCommand(QusapCombatCommand.Parry, 2d);
+            Assert.That(observedId, Is.GreaterThan(first.PressId));
+        }
+
+        [Test]
+        public void ParryPressedEventFiresExactlyOnce()
+        {
+            using TestInputReader input = new();
+            int count = 0;
+            input.Reader.ParryPressed += _ => count++;
+            input.EnqueueCombatCommand(QusapCombatCommand.Parry, 2d);
+            Assert.That(count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void BlockedInputDoesNotEmitParryPressed()
+        {
+            using TestInputReader input = new();
+            int count = 0;
+            input.Reader.ParryPressed += _ => count++;
+            input.Reader.SetGameplayInputBlocked(true);
+            input.EnqueueCombatCommand(QusapCombatCommand.Parry, 2d);
+            Assert.That(count, Is.Zero);
+            Assert.That(input.Reader.PendingCombatCommandCount, Is.Zero);
+        }
+
+        [Test]
+        public void ParryRemainsPresentInCombatFifo()
+        {
+            using TestInputReader input = new();
+            input.EnqueueCombatCommand(QusapCombatCommand.Parry, 2d);
+            Assert.That(input.Reader.TryConsumeCombatCommand(out QusapCombatCommandPress press), Is.True);
+            Assert.That(press.Command, Is.EqualTo(QusapCombatCommand.Parry));
+            Assert.That(press.Timestamp, Is.EqualTo(2d));
+        }
+
+        [Test]
+        public void ClearingBufferDoesNotReuseParryPressId()
+        {
+            using TestInputReader input = new();
+            ulong first = input.EnqueueCombatCommand(QusapCombatCommand.Parry, 1d).PressId;
+            input.Reader.DiscardPendingCombatCommands();
+            ulong second = input.EnqueueCombatCommand(QusapCombatCommand.Parry, 2d).PressId;
+            Assert.That(second, Is.GreaterThan(first));
+        }
+
+        [Test]
         public void BufferedCommandsCanCompleteDamageCombo()
         {
             IReadOnlyList<QusapComboDefinition> definitions =
@@ -247,6 +327,40 @@ namespace Qusap.Tests
 
             Assert.Fail($"Missing combo definition {comboId}.");
             return null;
+        }
+
+        private sealed class TestInputReader : IDisposable
+        {
+            private readonly GameObject root;
+
+            public TestInputReader()
+            {
+                root = new GameObject("CombatInputEditModeTest");
+                root.SetActive(false);
+                Reader = root.AddComponent<QusapInputReader>();
+                FieldInfo field = typeof(QusapInputReader).GetField(
+                    "combatCommandBuffer", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(field, Is.Not.Null);
+                field.SetValue(Reader, new QusapCombatCommandBuffer());
+            }
+
+            public QusapInputReader Reader { get; }
+
+            public QusapCombatCommandPress EnqueueCombatCommand(
+                QusapCombatCommand command,
+                double timestamp)
+            {
+                MethodInfo method = typeof(QusapInputReader).GetMethod(
+                    "EnqueueCombatCommand", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null);
+                return (QusapCombatCommandPress)method.Invoke(
+                    Reader, new object[] { command, timestamp });
+            }
+
+            public void Dispose()
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
     }
 }

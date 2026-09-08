@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -35,6 +36,8 @@ namespace Qusap
         private bool strongKickPressed;
         private bool headbuttPressed;
         private bool gameplayInputBlocked;
+
+        public event Action<QusapCombatCommandPress> ParryPressed;
 
         public float HorizontalValue => gameplayInputBlocked ? 0f : horizontalValue;
         public QusapLocalPlayerSlot LocalPlayerSlot => localPlayerSlot;
@@ -296,12 +299,22 @@ namespace Qusap
             combatCommandBuffer?.Clear();
         }
 
-        internal void EnqueueCombatCommand(QusapCombatCommand command, double timestamp)
+        internal QusapCombatCommandPress EnqueueCombatCommand(
+            QusapCombatCommand command,
+            double timestamp)
         {
-            if (!gameplayInputBlocked)
+            if (gameplayInputBlocked || combatCommandBuffer == null)
             {
-                combatCommandBuffer?.Enqueue(command, timestamp);
+                return default;
             }
+
+            QusapCombatCommandPress press = combatCommandBuffer.Enqueue(command, timestamp);
+            if (command == QusapCombatCommand.Parry)
+            {
+                ParryPressed?.Invoke(press);
+            }
+
+            return press;
         }
 
         public void SetLocalPlayerSlot(QusapLocalPlayerSlot slot)

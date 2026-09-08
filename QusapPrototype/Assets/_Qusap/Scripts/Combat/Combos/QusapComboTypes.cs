@@ -19,6 +19,23 @@ namespace Qusap
         Launch
     }
 
+    public readonly struct QusapCombatCommandPress
+    {
+        public QusapCombatCommandPress(
+            QusapCombatCommand command,
+            ulong pressId,
+            double timestamp)
+        {
+            Command = command;
+            PressId = pressId;
+            Timestamp = timestamp;
+        }
+
+        public QusapCombatCommand Command { get; }
+        public ulong PressId { get; }
+        public double Timestamp { get; }
+    }
+
     [Flags]
     public enum QusapComboMatchFlags
     {

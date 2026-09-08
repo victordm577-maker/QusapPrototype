@@ -13,6 +13,7 @@ namespace Qusap
     {
         [SerializeField] private InputActionAsset inputActionAsset;
         [SerializeField] private QusapLocalPlayerSlot localPlayerSlot = QusapLocalPlayerSlot.Player1Keyboard;
+        [SerializeField, Min(1)] private int combatCommandBufferCapacity = 32;
 
         private InputActionAsset runtimeActionAsset;
         private InputAction moveAction;
@@ -22,6 +23,9 @@ namespace Qusap
         private InputAction weakKickAction;
         private InputAction strongKickAction;
         private InputAction headbuttAction;
+        private InputAction weaponStrongAction;
+        private InputAction parryAction;
+        private QusapCombatCommandBuffer combatCommandBuffer;
         private float horizontalValue;
         private bool jumpPressed;
         private bool jumpReleased;
@@ -34,9 +38,12 @@ namespace Qusap
 
         public float HorizontalValue => gameplayInputBlocked ? 0f : horizontalValue;
         public QusapLocalPlayerSlot LocalPlayerSlot => localPlayerSlot;
+        public int PendingCombatCommandCount => combatCommandBuffer?.PendingCount ?? 0;
 
         private void Awake()
         {
+            combatCommandBuffer = new QusapCombatCommandBuffer(combatCommandBufferCapacity);
+
             if (inputActionAsset == null)
             {
                 Debug.LogError("QusapInputReader requires the configured Gameplay actions in its InputActionAsset.");
@@ -56,6 +63,8 @@ namespace Qusap
             weakKickAction = runtimeActionAsset.FindAction("Gameplay/WeakKick");
             strongKickAction = runtimeActionAsset.FindAction("Gameplay/StrongKick");
             headbuttAction = runtimeActionAsset.FindAction("Gameplay/Headbutt");
+            weaponStrongAction = runtimeActionAsset.FindAction("Gameplay/WeaponStrong");
+            parryAction = runtimeActionAsset.FindAction("Gameplay/Parry");
 
             if (moveAction == null)
             {
@@ -91,6 +100,11 @@ namespace Qusap
             {
                 Debug.LogError("QusapInputReader could not find the 'Gameplay/Headbutt' action in the assigned InputActionAsset.");
             }
+        }
+
+        private void OnValidate()
+        {
+            combatCommandBufferCapacity = Mathf.Max(1, combatCommandBufferCapacity);
         }
 
         private void OnEnable()
@@ -136,10 +150,34 @@ namespace Qusap
                 headbuttAction.Enable();
                 headbuttAction.performed += HandleHeadbuttPerformed;
             }
+
+            if (weaponStrongAction != null)
+            {
+                weaponStrongAction.Enable();
+                weaponStrongAction.performed += HandleWeaponStrongPerformed;
+            }
+
+            if (parryAction != null)
+            {
+                parryAction.Enable();
+                parryAction.performed += HandleParryPerformed;
+            }
         }
 
         private void OnDisable()
         {
+            if (parryAction != null)
+            {
+                parryAction.performed -= HandleParryPerformed;
+                parryAction.Disable();
+            }
+
+            if (weaponStrongAction != null)
+            {
+                weaponStrongAction.performed -= HandleWeaponStrongPerformed;
+                weaponStrongAction.Disable();
+            }
+
             if (headbuttAction != null)
             {
                 headbuttAction.performed -= HandleHeadbuttPerformed;
@@ -242,6 +280,17 @@ namespace Qusap
             return ConsumeBufferedAction(ref headbuttPressed);
         }
 
+        public bool TryConsumeCombatCommand(out QusapCombatCommandPress press)
+        {
+            if (gameplayInputBlocked || combatCommandBuffer == null)
+            {
+                press = default;
+                return false;
+            }
+
+            return combatCommandBuffer.TryDequeue(out press);
+        }
+
         public void SetLocalPlayerSlot(QusapLocalPlayerSlot slot)
         {
             if (Application.isPlaying && runtimeActionAsset != null)
@@ -269,6 +318,7 @@ namespace Qusap
             weakKickPressed = false;
             strongKickPressed = false;
             headbuttPressed = false;
+            combatCommandBuffer?.Clear();
         }
 
         private void ConfigureRuntimeInput()
@@ -323,17 +373,51 @@ namespace Qusap
 
         private void HandleWeakKickPerformed(InputAction.CallbackContext context)
         {
+            if (gameplayInputBlocked)
+            {
+                return;
+            }
+
             weakKickPressed = true;
+            combatCommandBuffer.Enqueue(QusapCombatCommand.BodyAttack, context.time);
         }
 
         private void HandleStrongKickPerformed(InputAction.CallbackContext context)
         {
+            if (gameplayInputBlocked)
+            {
+                return;
+            }
+
             strongKickPressed = true;
+            combatCommandBuffer.Enqueue(QusapCombatCommand.WeaponLight, context.time);
         }
 
         private void HandleHeadbuttPerformed(InputAction.CallbackContext context)
         {
+            if (gameplayInputBlocked)
+            {
+                return;
+            }
+
             headbuttPressed = true;
+            combatCommandBuffer.Enqueue(QusapCombatCommand.Headbutt, context.time);
+        }
+
+        private void HandleWeaponStrongPerformed(InputAction.CallbackContext context)
+        {
+            if (!gameplayInputBlocked)
+            {
+                combatCommandBuffer.Enqueue(QusapCombatCommand.WeaponStrong, context.time);
+            }
+        }
+
+        private void HandleParryPerformed(InputAction.CallbackContext context)
+        {
+            if (!gameplayInputBlocked)
+            {
+                combatCommandBuffer.Enqueue(QusapCombatCommand.Parry, context.time);
+            }
         }
     }
 }

@@ -353,6 +353,81 @@ namespace Qusap.Tests
         }
 
         [Test]
+        public void AttackerUpdatingFirstDoesNotConsumeSameTickValidParry()
+        {
+            Pair pair = CreateArmedPair();
+            pair.Attacker.AdvanceFinisher(pair.Attacker.Combat.ParryWindowOpensAt);
+
+            pair.Attacker.ProcessFixed();
+            pair.Defender.Parry(pair.WindowMidpoint);
+            pair.Defender.ProcessFixed();
+
+            Assert.That(pair.Attacker.Combat.HasArmedFinisher, Is.False);
+            Assert.That(
+                pair.Attacker.Combat.FinisherDefensePhase,
+                Is.EqualTo(QusapFinisherDefensePhase.Parried));
+        }
+
+        [Test]
+        public void DefenderUpdatingFirstProducesSameParryResult()
+        {
+            Pair pair = CreateArmedPair();
+            pair.Attacker.AdvanceFinisher(pair.Attacker.Combat.ParryWindowOpensAt);
+
+            pair.Defender.Parry(pair.WindowMidpoint);
+            pair.Defender.ProcessFixed();
+            pair.Attacker.ProcessFixed();
+
+            Assert.That(pair.Attacker.Combat.HasArmedFinisher, Is.False);
+            Assert.That(
+                pair.Attacker.Combat.FinisherDefensePhase,
+                Is.EqualTo(QusapFinisherDefensePhase.Parried));
+        }
+
+        [Test]
+        public void OneParryPressCancelsOnlyEarliestIncomingFinisher()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            PlayerHarness early = CreatePlayer("EarlyAttacker");
+            PlayerHarness late = CreatePlayer("LateAttacker");
+            early.ConfigureParrySettings(0.1d, 0.2d);
+            late.ConfigureParrySettings(0.1d, 0.5d);
+            early.ArmLaunchAgainst(defender);
+            late.ArmLaunchAgainst(defender);
+            double timestamp = Math.Max(
+                early.Combat.ParryWindowOpensAt,
+                late.Combat.ParryWindowOpensAt) + 0.01d;
+
+            defender.Parry(timestamp);
+            defender.ProcessFixed();
+
+            Assert.That(early.Combat.HasArmedFinisher, Is.False);
+            Assert.That(late.Combat.HasArmedFinisher, Is.True);
+        }
+
+        [Test]
+        public void ReusedParryPressIdCannotCancelRemainingFinisher()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            PlayerHarness first = CreatePlayer("FirstAttacker");
+            PlayerHarness second = CreatePlayer("SecondAttacker");
+            first.ArmLaunchAgainst(defender);
+            second.ArmLaunchAgainst(defender);
+            double timestamp = Math.Max(
+                first.Combat.ParryWindowOpensAt,
+                second.Combat.ParryWindowOpensAt) + 0.01d;
+
+            QusapCombatCommandPress press = defender.Parry(timestamp);
+            defender.ProcessFixed();
+            defender.ReplayParry(press);
+            defender.ProcessFixed();
+
+            int remaining = (first.Combat.HasArmedFinisher ? 1 : 0)
+                + (second.Combat.HasArmedFinisher ? 1 : 0);
+            Assert.That(remaining, Is.EqualTo(1));
+        }
+
+        [Test]
         public void OffensiveCommandsCannotStartAnotherAttackDuringWindow()
         {
             Pair pair = CreateArmedPair();
@@ -578,9 +653,14 @@ namespace Qusap.Tests
                 Assert.That(Combat.IsAttacking, Is.False);
             }
 
-            public void Parry(double timestamp)
+            public QusapCombatCommandPress Parry(double timestamp)
             {
-                Input.EnqueueCombatCommand(QusapCombatCommand.Parry, timestamp);
+                return Input.EnqueueCombatCommand(QusapCombatCommand.Parry, timestamp);
+            }
+
+            public void ReplayParry(QusapCombatCommandPress press)
+            {
+                Invoke(Combat, "HandleParryPressed", press);
             }
 
             public void Enqueue(QusapCombatCommand command, double timestamp)

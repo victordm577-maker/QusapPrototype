@@ -44,6 +44,57 @@ namespace Qusap
             hitTargets.Clear();
         }
 
+        internal QusapFinisherImpactOutcome TryResolveFinisher(
+            QusapHitReceiver expectedTarget,
+            QusapFinisherHitInfo hitInfo,
+            QusapComboFinisherDefinition definition)
+        {
+            if (owner == null
+                || expectedTarget == null
+                || definition == null
+                || hitInfo.Source != owner)
+            {
+                return QusapFinisherImpactOutcome.Rejected;
+            }
+
+            int horizontalDirection = hitInfo.HorizontalDirection < 0 ? -1 : 1;
+            Vector2 offset = definition.HitboxOffset;
+            Vector3 localCenter = new(offset.x * horizontalDirection, offset.y, 0f);
+            Vector3 center = owner.transform.TransformPoint(localCenter);
+            Vector3 scale = owner.transform.lossyScale;
+            Vector3 halfExtents = new(
+                definition.HitboxSize.x * Mathf.Abs(scale.x) * 0.5f,
+                definition.HitboxSize.y * Mathf.Abs(scale.y) * 0.5f,
+                definition.HitboxDepth * Mathf.Abs(scale.z) * 0.5f);
+
+            Collider[] overlaps = Physics.OverlapBox(
+                center,
+                halfExtents,
+                owner.transform.rotation,
+                targetLayers,
+                QueryTriggerInteraction.Collide);
+
+            foreach (Collider overlap in overlaps)
+            {
+                QusapHurtbox hurtbox = overlap.GetComponent<QusapHurtbox>();
+                if (hurtbox == null)
+                {
+                    hurtbox = overlap.GetComponentInParent<QusapHurtbox>();
+                }
+
+                if (hurtbox == null || hurtbox.Receiver != expectedTarget)
+                {
+                    continue;
+                }
+
+                return expectedTarget.TryReceiveFinisher(hitInfo)
+                    ? QusapFinisherImpactOutcome.Applied
+                    : QusapFinisherImpactOutcome.Rejected;
+            }
+
+            return QusapFinisherImpactOutcome.Whiffed;
+        }
+
         private void Awake()
         {
             owner ??= GetComponentInParent<QusapCombatController>();

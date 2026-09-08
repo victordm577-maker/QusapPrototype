@@ -15,6 +15,7 @@ namespace Qusap
         private QusapHitstunController hitstunController;
 
         public event Action<QusapHitInfo> HitReceived;
+        public event Action<QusapFinisherHitInfo> FinisherReceived;
 
         public float TotalDamageReceived { get; private set; }
 
@@ -66,9 +67,50 @@ namespace Qusap
             return true;
         }
 
+        public bool TryReceiveFinisher(QusapFinisherHitInfo hitInfo)
+        {
+            if (!acceptsHits
+                || hitInfo.Source == null
+                || !hitInfo.Source.CombatAllowed
+                || !hitInfo.Source.isActiveAndEnabled
+                || !hitInfo.Source.gameObject.activeInHierarchy
+                || hitInfo.Source.gameObject == gameObject
+                || !Enum.IsDefined(typeof(QusapComboId), hitInfo.ComboId)
+                || hitInfo.RequestsDisarm != (hitInfo.ComboId == QusapComboId.Disarm)
+                || !IsFiniteNonNegative(hitInfo.Damage)
+                || !IsFiniteNonNegative(hitInfo.HorizontalKnockback)
+                || !IsFiniteNonNegative(hitInfo.VerticalKnockback)
+                || !IsFiniteNonNegative(hitInfo.HitstunDuration)
+                || (combatController != null && !combatController.CombatAllowed))
+            {
+                return false;
+            }
+
+            Vector3 velocity = rb.linearVelocity;
+            velocity.x = hitInfo.HorizontalDirection
+                * hitInfo.HorizontalKnockback
+                * knockbackMultiplier;
+            float verticalKnockback = hitInfo.VerticalKnockback * knockbackMultiplier;
+            velocity.y = Mathf.Max(velocity.y, verticalKnockback);
+            velocity.z = 0f;
+            rb.linearVelocity = velocity;
+            rb.WakeUp();
+
+            hitstunController?.EnterHitstun(hitInfo.HitstunDuration);
+            TotalDamageReceived += hitInfo.Damage;
+
+            FinisherReceived?.Invoke(hitInfo);
+            return true;
+        }
+
         public void ResetDamage()
         {
             TotalDamageReceived = 0f;
+        }
+
+        private static bool IsFiniteNonNegative(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value) && value >= 0f;
         }
     }
 }

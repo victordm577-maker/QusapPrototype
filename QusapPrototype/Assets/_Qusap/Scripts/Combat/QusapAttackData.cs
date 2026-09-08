@@ -55,6 +55,7 @@ namespace Qusap
         [SerializeField] private Vector2 hitboxSize = new(1f, 0.6f);
         [SerializeField] private Vector2 hitboxOffset = new(0.75f, -0.35f);
         [SerializeField] private float hitboxDepth = 1f;
+        [SerializeField] private float damage;
         [SerializeField] private float horizontalKnockback = 4f;
         [SerializeField] private float verticalKnockback = 1f;
         [SerializeField] private float hitstunDuration = 0.12f;
@@ -67,8 +68,7 @@ namespace Qusap
         public Vector2 HitboxSize => hitboxSize;
         public Vector2 HitboxOffset => hitboxOffset;
         public float HitboxDepth => hitboxDepth;
-        // The legacy terrestrial system had no damage/health value. Zero preserves that behavior.
-        public float Damage => 0f;
+        public float Damage => damage;
         public float HorizontalKnockback => horizontalKnockback;
         public float VerticalKnockback => verticalKnockback;
         public float HitstunDuration => hitstunDuration;
@@ -85,6 +85,7 @@ namespace Qusap
                 hitboxSize = new Vector2(1f, 0.6f),
                 hitboxOffset = new Vector2(0.75f, -0.35f),
                 hitboxDepth = 1f,
+                damage = 0f,
                 horizontalKnockback = 4f,
                 verticalKnockback = 1f,
                 hitstunDuration = 0.12f,
@@ -103,6 +104,7 @@ namespace Qusap
                 hitboxSize = new Vector2(1.35f, 0.75f),
                 hitboxOffset = new Vector2(0.9f, -0.25f),
                 hitboxDepth = 1f,
+                damage = 0f,
                 horizontalKnockback = 7f,
                 verticalKnockback = 3f,
                 hitstunDuration = 0.24f,
@@ -121,10 +123,49 @@ namespace Qusap
                 hitboxSize = new Vector2(1.2f, 0.8f),
                 hitboxOffset = new Vector2(0.8f, 0.45f),
                 hitboxDepth = 1f,
+                damage = 0f,
                 horizontalKnockback = 9f,
                 verticalKnockback = 4f,
                 hitstunDuration = 0.4f,
                 lockHorizontalMovement = true
+            };
+        }
+
+        public static QusapAttackData CreateComboBodyAttackGround()
+        {
+            return new QusapAttackData
+            {
+                attackType = QusapAttackType.WeakKick,
+                startupTime = 0.08f,
+                activeDuration = 0.08f,
+                recoveryTime = 0.14f,
+                hitboxSize = new Vector2(1f, 0.6f),
+                hitboxOffset = new Vector2(0.75f, -0.35f),
+                hitboxDepth = 1f,
+                damage = 1f,
+                horizontalKnockback = 1.75f,
+                verticalKnockback = 0.35f,
+                hitstunDuration = 0.18f,
+                lockHorizontalMovement = false
+            };
+        }
+
+        public static QusapAttackData CreateComboWeaponLightGround()
+        {
+            return new QusapAttackData
+            {
+                attackType = QusapAttackType.StrongKick,
+                startupTime = 0.10f,
+                activeDuration = 0.08f,
+                recoveryTime = 0.16f,
+                hitboxSize = new Vector2(1.15f, 0.65f),
+                hitboxOffset = new Vector2(0.80f, -0.25f),
+                hitboxDepth = 1f,
+                damage = 1f,
+                horizontalKnockback = 1.25f,
+                verticalKnockback = 0.25f,
+                hitstunDuration = 0.20f,
+                lockHorizontalMovement = false
             };
         }
 
@@ -141,6 +182,9 @@ namespace Qusap
             hitboxSize.x = Mathf.Max(hitboxSize.x, 0.01f);
             hitboxSize.y = Mathf.Max(hitboxSize.y, 0.01f);
             hitboxDepth = Mathf.Max(hitboxDepth, 0.01f);
+            damage = float.IsNaN(damage) || float.IsInfinity(damage)
+                ? 0f
+                : Mathf.Max(damage, 0f);
             horizontalKnockback = Mathf.Max(horizontalKnockback, 0f);
             verticalKnockback = Mathf.Max(verticalKnockback, 0f);
             hitstunDuration = Mathf.Max(hitstunDuration, 0f);
@@ -267,6 +311,50 @@ namespace Qusap
                 diveHorizontalControlMultiplier = 0.25f,
                 diveBounceSpeed = 5.5f,
                 blockDash = true
+            };
+        }
+
+        public static QusapAirAttackData CreateComboBodyAttackAir()
+        {
+            return new QusapAirAttackData
+            {
+                attackType = QusapAttackType.WeakKick,
+                startupTime = 0.07f,
+                activeDuration = 0.07f,
+                recoveryTime = 0.12f,
+                landingRecoveryTime = 0.08f,
+                damage = 1f,
+                hitboxSize = new Vector2(1f, 0.55f),
+                hitboxOffset = new Vector2(0.75f, 0f),
+                hitboxDepth = 1f,
+                horizontalKnockback = 1.50f,
+                verticalKnockback = 0.50f,
+                hitstunDuration = 0.16f,
+                lockHorizontalMovement = false,
+                horizontalVelocityRetention = 1f,
+                endActiveWindowOnLanding = true
+            };
+        }
+
+        public static QusapAirAttackData CreateComboWeaponLightAir()
+        {
+            return new QusapAirAttackData
+            {
+                attackType = QusapAttackType.StrongKick,
+                startupTime = 0.10f,
+                activeDuration = 0.08f,
+                recoveryTime = 0.16f,
+                landingRecoveryTime = 0.12f,
+                damage = 1f,
+                hitboxSize = new Vector2(1.15f, 0.65f),
+                hitboxOffset = new Vector2(0.80f, -0.30f),
+                hitboxDepth = 1f,
+                horizontalKnockback = 1.25f,
+                verticalKnockback = 0.25f,
+                hitstunDuration = 0.20f,
+                lockHorizontalMovement = false,
+                horizontalVelocityRetention = 0.98f,
+                endActiveWindowOnLanding = true
             };
         }
 

@@ -32,6 +32,16 @@ namespace Qusap
         [SerializeField] private QusapAirAttackData strongKickAir = QusapAirAttackData.CreateStrongKickAir();
         [SerializeField] private QusapAirAttackData diveHeadbuttAir = QusapAirAttackData.CreateDiveHeadbuttAir();
 
+        [Header("Combo setup attacks")]
+        [SerializeField] private QusapAttackData comboBodyAttackGround =
+            QusapAttackData.CreateComboBodyAttackGround();
+        [SerializeField] private QusapAttackData comboWeaponLightGround =
+            QusapAttackData.CreateComboWeaponLightGround();
+        [SerializeField] private QusapAirAttackData comboBodyAttackAir =
+            QusapAirAttackData.CreateComboBodyAttackAir();
+        [SerializeField] private QusapAirAttackData comboWeaponLightAir =
+            QusapAirAttackData.CreateComboWeaponLightAir();
+
         [Header("Combo recognition")]
         [SerializeField] private bool comboRecognitionEnabled = true;
         [SerializeField] private bool logRecognizedCombos = true;
@@ -116,6 +126,8 @@ namespace Qusap
         public QusapHitReceiver HitReceiver { get; private set; }
         public bool DiveHeadbuttAvailable { get; private set; } = true;
         public bool ComboRecognitionEnabled => comboRecognitionEnabled;
+        public bool IsComboSetupAttack { get; private set; }
+        public QusapCombatCommand? CurrentComboSetupCommand { get; private set; }
         public QusapComboId? LastCompletedCombo { get; private set; }
         public bool HasArmedFinisher { get; private set; }
         public QusapComboId? ArmedFinisherCombo { get; private set; }
@@ -278,29 +290,66 @@ namespace Qusap
 
         internal bool TryStartAttack(QusapAttackType attackType, bool groundedAtPress)
         {
+            QusapAttackVariant selectedVariant = SelectAttackVariant(attackType, groundedAtPress);
+            IQusapAttackDefinition attackData = GetAttackDefinition(selectedVariant);
+            return TryStartConfiguredAttack(selectedVariant, attackData, null);
+        }
+
+        private bool TryStartComboSetupAttack(
+            QusapCombatCommand command,
+            bool groundedAtPress)
+        {
+            QusapAttackVariant selectedVariant;
+            IQusapAttackDefinition attackData;
+            switch (command)
+            {
+                case QusapCombatCommand.BodyAttack:
+                    selectedVariant = groundedAtPress
+                        ? QusapAttackVariant.WeakKickGround
+                        : QusapAttackVariant.WeakKickAir;
+                    attackData = groundedAtPress
+                        ? comboBodyAttackGround
+                        : comboBodyAttackAir;
+                    break;
+                case QusapCombatCommand.WeaponLight:
+                    selectedVariant = groundedAtPress
+                        ? QusapAttackVariant.StrongKickGround
+                        : QusapAttackVariant.StrongKickAir;
+                    attackData = groundedAtPress
+                        ? comboWeaponLightGround
+                        : comboWeaponLightAir;
+                    break;
+                default:
+                    return false;
+            }
+
+            return TryStartConfiguredAttack(selectedVariant, attackData, command);
+        }
+
+        private bool TryStartConfiguredAttack(
+            QusapAttackVariant selectedVariant,
+            IQusapAttackDefinition attackData,
+            QusapCombatCommand? comboSetupCommand)
+        {
             if (!combatAllowed
                 || IsAttacking
                 || BlocksOffenseForFinisher()
                 || (hitstunController != null && hitstunController.IsInHitstun)
                 || dashMotor == null
-                || dashMotor.IsDashing)
+                || dashMotor.IsDashing
+                || attackData == null)
             {
                 return false;
             }
 
-            QusapAttackVariant selectedVariant = SelectAttackVariant(attackType, groundedAtPress);
             if (selectedVariant == QusapAttackVariant.DiveHeadbuttAir && !DiveHeadbuttAvailable)
             {
                 return false;
             }
 
-            IQusapAttackDefinition attackData = GetAttackDefinition(selectedVariant);
-            if (attackData == null)
-            {
-                return false;
-            }
-
             currentAttack = attackData;
+            IsComboSetupAttack = comboSetupCommand.HasValue;
+            CurrentComboSetupCommand = comboSetupCommand;
             currentAttackExecutionId++;
             CurrentAttackVariant = selectedVariant;
             attackDirection = FacingDirection;
@@ -318,7 +367,8 @@ namespace Qusap
             else if (selectedVariant == QusapAttackVariant.StrongKickAir)
             {
                 Vector3 velocity = rb.linearVelocity;
-                velocity.x *= strongKickAir.HorizontalVelocityRetention;
+                QusapAirAttackData activeAirAttack = attackData as QusapAirAttackData;
+                velocity.x *= activeAirAttack?.HorizontalVelocityRetention ?? 1f;
                 rb.linearVelocity = velocity;
             }
 
@@ -372,6 +422,11 @@ namespace Qusap
 
         internal IQusapAttackDefinition GetAttackDefinition(QusapAttackVariant attackVariant)
         {
+            if (IsAttacking && CurrentAttackVariant == attackVariant && currentAttack != null)
+            {
+                return currentAttack;
+            }
+
             return attackVariant switch
             {
                 QusapAttackVariant.WeakKickGround => weakKick,
@@ -464,6 +519,11 @@ namespace Qusap
                 || (dashMotor != null && dashMotor.IsDashing);
             if (blocked)
             {
+                if (IsComboSetupAttack && dashMotor != null && dashMotor.IsDashing)
+                {
+                    CancelCurrentAttack(true);
+                }
+
                 ResetComboRecognition();
                 return false;
             }
@@ -478,6 +538,11 @@ namespace Qusap
                 && !IsValidComboTarget(comboTarget)
                 && comboMatcher.HasActiveCandidates)
             {
+                if (IsComboSetupAttack)
+                {
+                    CancelCurrentAttack(true);
+                }
+
                 ResetComboRecognition();
                 return false;
             }
@@ -529,8 +594,7 @@ namespace Qusap
                 {
                     bool startsNewSequence = !comboMatcher.HasActiveCandidates
                         || !ContinuesExistingCandidate(preview);
-                    if (!TryGetLegacyAttack(press.Command, out QusapAttackType setupAttack)
-                        || !TryStartAttack(setupAttack, grounded))
+                    if (!TryStartComboSetupAttack(press.Command, grounded))
                     {
                         ResetComboRecognition();
                         return false;
@@ -1073,6 +1137,11 @@ namespace Qusap
 
         private void HandleOwnerHitReceived(QusapHitInfo hitInfo)
         {
+            if (IsComboSetupAttack)
+            {
+                CancelCurrentAttack(true);
+            }
+
             ResetComboRecognition();
         }
 
@@ -1281,6 +1350,7 @@ namespace Qusap
             QusapAttackVariant finishedVariant = CurrentAttackVariant;
             attackHitbox.EndAttack();
             currentAttack = null;
+            ClearComboSetupAttackState();
             phaseTimeRemaining = 0f;
             CurrentPhase = QusapAttackPhase.Idle;
             CurrentAttackVariant = QusapAttackVariant.None;
@@ -1300,6 +1370,7 @@ namespace Qusap
             if (!IsAttacking || currentAttack == null)
             {
                 attackHitbox?.EndAttack();
+                ClearComboSetupAttackState();
                 CurrentPhase = QusapAttackPhase.Idle;
                 CurrentAttackVariant = QusapAttackVariant.None;
                 return;
@@ -1309,6 +1380,7 @@ namespace Qusap
             QusapAttackVariant canceledVariant = CurrentAttackVariant;
             attackHitbox?.EndAttack();
             currentAttack = null;
+            ClearComboSetupAttackState();
             phaseTimeRemaining = 0f;
             CurrentPhase = QusapAttackPhase.Idle;
             CurrentAttackVariant = QusapAttackVariant.None;
@@ -1365,6 +1437,10 @@ namespace Qusap
             weakKickAir ??= QusapAirAttackData.CreateWeakKickAir();
             strongKickAir ??= QusapAirAttackData.CreateStrongKickAir();
             diveHeadbuttAir ??= QusapAirAttackData.CreateDiveHeadbuttAir();
+            comboBodyAttackGround ??= QusapAttackData.CreateComboBodyAttackGround();
+            comboWeaponLightGround ??= QusapAttackData.CreateComboWeaponLightGround();
+            comboBodyAttackAir ??= QusapAirAttackData.CreateComboBodyAttackAir();
+            comboWeaponLightAir ??= QusapAirAttackData.CreateComboWeaponLightAir();
 
             weakKick.SetAttackType(QusapAttackType.WeakKick);
             strongKick.SetAttackType(QusapAttackType.StrongKick);
@@ -1372,6 +1448,10 @@ namespace Qusap
             weakKickAir.SetAttackType(QusapAttackType.WeakKick);
             strongKickAir.SetAttackType(QusapAttackType.StrongKick);
             diveHeadbuttAir.SetAttackType(QusapAttackType.Headbutt);
+            comboBodyAttackGround.SetAttackType(QusapAttackType.WeakKick);
+            comboWeaponLightGround.SetAttackType(QusapAttackType.StrongKick);
+            comboBodyAttackAir.SetAttackType(QusapAttackType.WeakKick);
+            comboWeaponLightAir.SetAttackType(QusapAttackType.StrongKick);
 
             weakKick.Validate();
             strongKick.Validate();
@@ -1379,6 +1459,16 @@ namespace Qusap
             weakKickAir.Validate();
             strongKickAir.Validate();
             diveHeadbuttAir.Validate();
+            comboBodyAttackGround.Validate();
+            comboWeaponLightGround.Validate();
+            comboBodyAttackAir.Validate();
+            comboWeaponLightAir.Validate();
+        }
+
+        private void ClearComboSetupAttackState()
+        {
+            IsComboSetupAttack = false;
+            CurrentComboSetupCommand = null;
         }
 
         private static bool IsAirVariant(QusapAttackVariant variant)

@@ -121,6 +121,10 @@ namespace Qusap.Tests
                     Is.SameAs(bootstrap.PlayerOnePresenter.gameObject));
                 Assert.That(bootstrap.PlayerTwoEquipment.gameObject,
                     Is.SameAs(bootstrap.PlayerTwoPresenter.gameObject));
+                Assert.That(bootstrap.PickupRadius,
+                    Is.EqualTo(QusapWeaponPickupResolver.DefaultPickupRadius));
+                Assert.That(bootstrap.PreviousOwnerPickupLockout,
+                    Is.EqualTo(QusapWeaponPickupResolver.DefaultPreviousOwnerLockout));
             });
         }
 

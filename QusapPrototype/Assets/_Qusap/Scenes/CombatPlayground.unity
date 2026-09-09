@@ -287,6 +287,8 @@ MonoBehaviour:
   droppedOutwardDistance: 0.55
   droppedFallDistance: 0.7
   droppedDuration: 0.4
+  pickupRadius: 0.85
+  previousOwnerPickupLockout: 1
 --- !u!4 &395847090
 Transform:
   m_ObjectHideFlags: 0

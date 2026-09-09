@@ -21,6 +21,9 @@ namespace Qusap
         private float elapsed;
         private float planeZ;
         private bool initialized;
+        private bool claimed;
+        private ulong? previousOwnerEntityId;
+        private double droppedAt;
 
         public QusapWeaponInstance Weapon => weapon;
         public ulong InstanceId => weapon?.InstanceId ?? 0;
@@ -28,6 +31,9 @@ namespace Qusap
         public GameObject VisualInstance => visualInstance;
         public bool IsInitialized => initialized;
         public bool IsSettled => initialized && elapsed >= duration;
+        public bool IsClaimed => claimed;
+        public ulong? PreviousOwnerEntityId => previousOwnerEntityId;
+        public double DroppedAt => droppedAt;
         public float PlaneZ => planeZ;
 
         private void Update()
@@ -45,7 +51,9 @@ namespace Qusap
             int outwardDirection,
             float animationDuration = DefaultDuration,
             float outwardDistance = DefaultOutwardDistance,
-            float fallDistance = DefaultFallDistance)
+            float fallDistance = DefaultFallDistance,
+            ulong? formerOwnerEntityId = null,
+            double dropTimestamp = 0d)
         {
             if (initialized
                 || droppedWeapon == null
@@ -57,7 +65,10 @@ namespace Qusap
                 || !float.IsFinite(outwardDistance)
                 || outwardDistance < 0f
                 || !float.IsFinite(fallDistance)
-                || fallDistance < 0f)
+                || fallDistance < 0f
+                || (formerOwnerEntityId.HasValue
+                    && formerOwnerEntityId.Value == 0)
+                || !IsFinite(dropTimestamp))
             {
                 return false;
             }
@@ -75,6 +86,9 @@ namespace Qusap
             startRotation = Quaternion.identity;
             endRotation = Quaternion.Euler(0f, 0f, -DefaultRestingTilt * direction);
             elapsed = 0f;
+            claimed = false;
+            previousOwnerEntityId = formerOwnerEntityId;
+            droppedAt = dropTimestamp;
             transform.SetPositionAndRotation(startPosition, startRotation);
             transform.localScale = Vector3.one;
 
@@ -86,6 +100,29 @@ namespace Qusap
             visualInstance.SetActive(true);
             initialized = true;
             return true;
+        }
+
+        internal QusapDroppedWeaponSnapshot CreatePickupSnapshot()
+        {
+            return new QusapDroppedWeaponSnapshot(
+                InstanceId,
+                weapon != null && weapon.IsFree,
+                IsSettled,
+                claimed,
+                previousOwnerEntityId,
+                droppedAt,
+                transform.position);
+        }
+
+        internal void MarkClaimed()
+        {
+            if (!initialized || claimed)
+            {
+                return;
+            }
+
+            claimed = true;
+            gameObject.SetActive(false);
         }
 
         public void Advance(float deltaTime)
@@ -114,6 +151,11 @@ namespace Qusap
             return float.IsFinite(value.x)
                 && float.IsFinite(value.y)
                 && float.IsFinite(value.z);
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
     }
 }

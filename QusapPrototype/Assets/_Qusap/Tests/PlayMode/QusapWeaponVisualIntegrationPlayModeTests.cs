@@ -413,6 +413,261 @@ namespace Qusap.Tests
             Assert.That(match.PlayerTwo.Presenter.WeaponSocket.childCount, Is.EqualTo(1));
         }
 
+        [UnityTest]
+        public IEnumerator UnarmedPlayerAutomaticallyPicksSettledWeaponWithoutSideEffects()
+        {
+            MatchRig match = CreateMatch();
+            Assert.That(match.PlayerOne.Equipment.TryDrop(out _, out _),
+                Is.EqualTo(QusapWeaponOperationResult.Success));
+            QusapWeaponInstance weapon = match.PlayerTwo.Equipment.EquippedWeapon;
+            float damageBefore = match.PlayerOne.Receiver.TotalDamageReceived;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            GameObject expectedVisualPrefab = dropped.VisualPrefab;
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+            Vector3 positionBefore = match.PlayerOne.Root.transform.position;
+            Vector3 velocityBefore = match.PlayerOne.Body.linearVelocity;
+            ulong instanceId = weapon.InstanceId;
+
+            yield return null;
+
+            Assert.That(match.PlayerOne.Equipment.EquippedWeapon, Is.SameAs(weapon));
+            Assert.That(match.PlayerOne.Equipment.EquippedWeapon.InstanceId,
+                Is.EqualTo(instanceId));
+            Assert.That(weapon.OwnerEntityId,
+                Is.EqualTo(match.PlayerOne.Equipment.OwnerEntityId));
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.Zero);
+            Assert.That(dropped == null || !dropped.gameObject.activeSelf, Is.True);
+            AssertSingleEquippedVisual(match.PlayerOne);
+            Assert.That(match.PlayerOne.Presenter.DisplayedVisualPrefab,
+                Is.SameAs(expectedVisualPrefab));
+            AssertPassiveVisual(match.PlayerOne.Presenter.EquippedVisual);
+            Assert.That(match.PlayerOne.Root.transform.position, Is.EqualTo(positionBefore));
+            Assert.That(match.PlayerOne.Body.linearVelocity, Is.EqualTo(velocityBefore));
+            Assert.That(match.PlayerOne.Receiver.TotalDamageReceived, Is.EqualTo(damageBefore));
+            Assert.That(match.PlayerOne.Combat.IsAttacking, Is.False);
+        }
+
+        [Test]
+        public void PickupWaitsForDroppedVisualToSettle()
+        {
+            MatchRig match = CreateMatch();
+            match.PlayerOne.Equipment.TryDrop(out _, out _);
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+
+            Assert.That(match.Bootstrap.ProcessPickups(dropped.DroppedAt), Is.Zero);
+            Assert.That(match.PlayerOne.Equipment.HasWeapon, Is.False);
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.EqualTo(1));
+
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+            Assert.That(match.Bootstrap.ProcessPickups(dropped.DroppedAt), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ArmedPlayerNeitherSwapsNorBlocksEligibleUnarmedPlayer()
+        {
+            MatchRig match = CreateMatch();
+            QusapWeaponInstance armedWeapon = match.PlayerOne.Equipment.EquippedWeapon;
+            QusapWeaponInstance droppedInstance = match.PlayerTwo.Equipment.EquippedWeapon;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+            match.PlayerTwo.Root.transform.position =
+                dropped.transform.position + Vector3.right * 0.25f;
+
+            Assert.That(match.Bootstrap.ProcessPickups(
+                dropped.DroppedAt + match.Bootstrap.PreviousOwnerPickupLockout),
+                Is.EqualTo(1));
+            Assert.That(match.PlayerOne.Equipment.EquippedWeapon, Is.SameAs(armedWeapon));
+            Assert.That(match.PlayerTwo.Equipment.EquippedWeapon, Is.SameAs(droppedInstance));
+            AssertExactlyOneOwnedEquippedRepresentation(
+                match,
+                match.PlayerOne,
+                armedWeapon);
+            AssertExactlyOneOwnedEquippedRepresentation(
+                match,
+                match.PlayerTwo,
+                droppedInstance);
+        }
+
+        [Test]
+        public void FormerOwnerCannotRecoverUntilExactLockoutBoundary()
+        {
+            MatchRig match = CreateMatch();
+            match.PlayerOne.Root.transform.position += Vector3.left * 100f;
+            QusapWeaponInstance weapon = match.PlayerTwo.Equipment.EquippedWeapon;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerTwo.Root.transform.position = dropped.transform.position;
+
+            Assert.That(match.Bootstrap.ProcessPickups(
+                dropped.DroppedAt + match.Bootstrap.PreviousOwnerPickupLockout - 0.001d),
+                Is.Zero);
+            Assert.That(match.PlayerTwo.Equipment.HasWeapon, Is.False);
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.EqualTo(1));
+
+            Assert.That(match.Bootstrap.ProcessPickups(
+                dropped.DroppedAt + match.Bootstrap.PreviousOwnerPickupLockout),
+                Is.EqualTo(1));
+            Assert.That(match.PlayerTwo.Equipment.EquippedWeapon, Is.SameAs(weapon));
+        }
+
+        [Test]
+        public void TwoPlayersCannotClaimSameDroppedInstance()
+        {
+            MatchRig match = CreateMatch();
+            match.PlayerOne.Equipment.TryDrop(out _, out _);
+            QusapWeaponInstance weapon = match.PlayerTwo.Equipment.EquippedWeapon;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position =
+                dropped.transform.position + Vector3.left * 0.1f;
+            match.PlayerTwo.Root.transform.position =
+                dropped.transform.position + Vector3.right * 0.2f;
+
+            Assert.That(match.Bootstrap.ProcessPickups(
+                dropped.DroppedAt + match.Bootstrap.PreviousOwnerPickupLockout),
+                Is.EqualTo(1));
+            Assert.That(match.PlayerOne.Equipment.EquippedWeapon, Is.SameAs(weapon));
+            Assert.That(match.PlayerTwo.Equipment.HasWeapon, Is.False);
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.Zero);
+        }
+
+        [Test]
+        public void RejectedEquipLeavesDroppedRepresentationAvailable()
+        {
+            MatchRig match = CreateMatch();
+            QusapWeaponInstance armedWeapon = match.PlayerOne.Equipment.EquippedWeapon;
+            QusapWeaponInstance droppedInstance = match.PlayerTwo.Equipment.EquippedWeapon;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+
+            Assert.That(match.Bootstrap.TryConfirmPickup(
+                match.PlayerOne.Equipment,
+                dropped), Is.False);
+            Assert.That(match.PlayerOne.Equipment.EquippedWeapon, Is.SameAs(armedWeapon));
+            Assert.That(droppedInstance.IsFree, Is.True);
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.EqualTo(1));
+            Assert.That(match.Bootstrap.DroppedWeapons[0], Is.SameAs(dropped));
+            Assert.That(dropped.gameObject.activeSelf, Is.True);
+        }
+
+        [Test]
+        public void RepeatedPickupCannotDuplicateLogicalOrVisualInstance()
+        {
+            MatchRig match = CreateMatch();
+            Assert.That(match.PlayerOne.Equipment.TryDrop(
+                out QusapWeaponInstance releasedWeapon,
+                out _), Is.EqualTo(QusapWeaponOperationResult.Success));
+            QusapWeaponInstance weapon = match.PlayerTwo.Equipment.EquippedWeapon;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+            double timestamp = dropped.DroppedAt + 2d;
+            Assert.That(match.Bootstrap.ProcessPickups(timestamp), Is.EqualTo(1));
+            ulong revision = match.PlayerOne.Equipment.Revision;
+            GameObject equippedVisual = match.PlayerOne.Presenter.EquippedVisual;
+
+            Assert.That(match.Bootstrap.ProcessPickups(timestamp), Is.Zero);
+            Assert.That(match.Bootstrap.TryPickup(
+                match.PlayerOne.Equipment, dropped, timestamp), Is.False);
+            Assert.That(match.PlayerOne.Equipment.EquippedWeapon, Is.SameAs(weapon));
+            Assert.That(match.PlayerOne.Equipment.Revision, Is.EqualTo(revision));
+            Assert.That(match.PlayerOne.Presenter.EquippedVisual, Is.SameAs(equippedVisual));
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.Zero);
+            AssertExactlyOneOwnedEquippedRepresentation(
+                match,
+                match.PlayerOne,
+                weapon);
+            Assert.That(releasedWeapon.IsFree, Is.True);
+            Assert.That(CountLogicalOwners(match, releasedWeapon.InstanceId), Is.Zero);
+            Assert.That(CountWeaponRepresentations(match, releasedWeapon.InstanceId), Is.Zero);
+        }
+
+        [Test]
+        public void DropPickupAndSecondDisarmPreserveIdentity()
+        {
+            MatchRig match = CreateMatch();
+            match.PlayerOne.Equipment.TryDrop(out _, out _);
+            QusapWeaponInstance weapon = match.PlayerTwo.Equipment.EquippedWeapon;
+            ulong instanceId = weapon.InstanceId;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView firstDrop = match.Bootstrap.DroppedWeapons[0];
+            firstDrop.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = firstDrop.transform.position;
+            Assert.That(match.Bootstrap.ProcessPickups(firstDrop.DroppedAt), Is.EqualTo(1));
+
+            Assert.That(match.PlayerOne.Equipment.TryDisarm(match.PlayerTwo.Combat), Is.True);
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.EqualTo(1));
+            QusapDroppedWeaponView secondDrop = match.Bootstrap.DroppedWeapons[0];
+            Assert.That(secondDrop, Is.Not.SameAs(firstDrop));
+            Assert.That(secondDrop.Weapon, Is.SameAs(weapon));
+            Assert.That(secondDrop.InstanceId, Is.EqualTo(instanceId));
+            Assert.That(weapon.IsFree, Is.True);
+        }
+
+        [Test]
+        public void DisabledOrPausedCoordinatorDoesNotPickup()
+        {
+            MatchRig match = CreateMatch();
+            match.PlayerOne.Equipment.TryDrop(out _, out _);
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+            double timestamp = dropped.DroppedAt + 2d;
+
+            match.Bootstrap.enabled = false;
+            Assert.That(match.Bootstrap.ProcessPickups(timestamp), Is.Zero);
+            match.Bootstrap.enabled = true;
+
+            float previousTimeScale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0f;
+                Assert.That(match.Bootstrap.ProcessPickups(timestamp), Is.Zero);
+            }
+            finally
+            {
+                Time.timeScale = previousTimeScale;
+            }
+
+            Assert.That(match.PlayerOne.Equipment.HasWeapon, Is.False);
+            Assert.That(match.Bootstrap.DroppedWeaponCount, Is.EqualTo(1));
+            Assert.That(dropped.gameObject.activeSelf, Is.True);
+        }
+
+        [Test]
+        public void DestroyingMatchAfterPickupReleasesCurrentOwnershipAndRecords()
+        {
+            MatchRig match = CreateMatch();
+            match.PlayerOne.Equipment.TryDrop(out _, out _);
+            QusapWeaponInstance weapon = match.PlayerTwo.Equipment.EquippedWeapon;
+            Assert.That(match.PlayerTwo.Equipment.TryDisarm(match.PlayerOne.Combat), Is.True);
+            QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[0];
+            dropped.Advance(QusapDroppedWeaponView.DefaultDuration);
+            match.PlayerOne.Root.transform.position = dropped.transform.position;
+            Assert.That(match.Bootstrap.ProcessPickups(dropped.DroppedAt), Is.EqualTo(1));
+            GameObject root = match.Bootstrap.gameObject;
+
+            UnityEngine.Object.DestroyImmediate(root);
+            matchRoots.Remove(root);
+
+            Assert.That(weapon.IsFree, Is.True);
+            Assert.That(match.PlayerOne.Equipment.HasWeapon, Is.False);
+            Assert.That(root == null, Is.True);
+        }
+
         [Test]
         public void DestroyingMatchCleansRepresentationsAndLogicalOwnership()
         {
@@ -487,6 +742,89 @@ namespace Qusap.Tests
             Assert.That(player.Presenter.WeaponSocket.childCount, Is.EqualTo(1));
             Assert.That(player.Presenter.DisplayedWeapon,
                 Is.SameAs(player.Equipment.EquippedWeapon));
+        }
+
+        private static void AssertExactlyOneOwnedEquippedRepresentation(
+            MatchRig match,
+            PlayerRig expectedOwner,
+            QusapWeaponInstance weapon)
+        {
+            Assert.That(expectedOwner.Equipment.EquippedWeapon, Is.SameAs(weapon));
+            Assert.That(weapon.OwnerEntityId, Is.EqualTo(expectedOwner.Equipment.OwnerEntityId));
+            Assert.That(expectedOwner.Presenter.DisplayedWeapon, Is.SameAs(weapon));
+            Assert.That(expectedOwner.Presenter.EquippedVisual, Is.Not.Null);
+            Assert.That(expectedOwner.Presenter.EquippedVisual.activeInHierarchy, Is.True);
+            Assert.That(CountActiveSocketChildren(expectedOwner.Presenter), Is.EqualTo(1));
+            Assert.That(CountActiveSocketChildren(match.PlayerOne.Presenter),
+                Is.LessThanOrEqualTo(1));
+            Assert.That(CountActiveSocketChildren(match.PlayerTwo.Presenter),
+                Is.LessThanOrEqualTo(1));
+            Assert.That(CountLogicalOwners(match, weapon.InstanceId), Is.EqualTo(1));
+            Assert.That(CountWeaponRepresentations(match, weapon.InstanceId), Is.EqualTo(1));
+            Assert.That(CountDroppedRepresentations(match, weapon.InstanceId), Is.Zero);
+        }
+
+        private static int CountActiveSocketChildren(QusapEquippedWeaponPresenter presenter)
+        {
+            int count = 0;
+            for (int i = 0; i < presenter.WeaponSocket.childCount; i++)
+            {
+                if (presenter.WeaponSocket.GetChild(i).gameObject.activeInHierarchy)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int CountLogicalOwners(MatchRig match, ulong instanceId)
+        {
+            int count = 0;
+            if (match.PlayerOne.Equipment.EquippedWeapon?.InstanceId == instanceId)
+            {
+                count++;
+            }
+
+            if (match.PlayerTwo.Equipment.EquippedWeapon?.InstanceId == instanceId)
+            {
+                count++;
+            }
+
+            return count;
+        }
+
+        private static int CountWeaponRepresentations(MatchRig match, ulong instanceId)
+        {
+            int count = CountEquippedRepresentation(match.PlayerOne, instanceId)
+                + CountEquippedRepresentation(match.PlayerTwo, instanceId);
+            return count + CountDroppedRepresentations(match, instanceId);
+        }
+
+        private static int CountEquippedRepresentation(PlayerRig player, ulong instanceId)
+        {
+            return player.Presenter.DisplayedWeapon?.InstanceId == instanceId
+                && player.Presenter.EquippedVisual != null
+                && player.Presenter.EquippedVisual.activeInHierarchy
+                ? 1
+                : 0;
+        }
+
+        private static int CountDroppedRepresentations(MatchRig match, ulong instanceId)
+        {
+            int count = 0;
+            for (int i = 0; i < match.Bootstrap.DroppedWeapons.Count; i++)
+            {
+                QusapDroppedWeaponView dropped = match.Bootstrap.DroppedWeapons[i];
+                if (dropped != null
+                    && dropped.InstanceId == instanceId
+                    && dropped.gameObject.activeInHierarchy)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private static void AssertPassiveVisual(GameObject visual)

@@ -428,6 +428,214 @@ namespace Qusap.Tests
         }
 
         [Test]
+        public void MashingBeforeWindowDoesNotEventuallyParry()
+        {
+            Pair pair = CreateArmedPair();
+            pair.Defender.Parry(pair.Attacker.Combat.ParryWindowOpensAt - 0.001d);
+            pair.Defender.Parry(pair.WindowMidpoint);
+            pair.Defender.ProcessFixed();
+
+            Assert.That(pair.Attacker.Combat.HasArmedFinisher, Is.True);
+            Assert.That(pair.Attacker.Combat.FinisherDefensePhase, Is.Not.EqualTo(QusapFinisherDefensePhase.Parried));
+            Assert.That(pair.Defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.OnRecovery));
+        }
+
+        [Test]
+        public void TooEarlyPressPreventsRetryAgainstSameFinisher()
+        {
+            PlayerHarness attacker = CreatePlayer("Attacker");
+            PlayerHarness defender = CreatePlayer("Defender");
+            attacker.ConfigureParrySettings(0.1d, 1d);
+            attacker.ArmLaunchAgainst(defender);
+            defender.Parry(attacker.Combat.ParryWindowOpensAt - 0.001d);
+            defender.ProcessFixed();
+            defender.Hitstun.ResetHitstun();
+
+            defender.Parry(attacker.Combat.ParryWindowOpensAt + 0.6d);
+            defender.ProcessFixed();
+
+            Assert.That(defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.AlreadyAttempted));
+            Assert.That(attacker.Combat.HasArmedFinisher, Is.True);
+        }
+
+        [Test]
+        public void PressDuringWindowWithoutPriorAttemptSucceeds()
+        {
+            Pair pair = CreateArmedPair();
+            pair.SuccessfulParry();
+
+            Assert.That(pair.Attacker.Combat.HasArmedFinisher, Is.False);
+            Assert.That(pair.Defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.Success));
+        }
+
+        [Test]
+        public void NoIncomingPressStartsRecovery()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            double timestamp = InputState.currentTime;
+            defender.Parry(timestamp);
+
+            Assert.That(defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.NoIncomingFinisher));
+            Assert.That(defender.Combat.TryGetCurrentParryCue(timestamp + 0.1d, out _), Is.False);
+        }
+
+        [Test]
+        public void PressDuringRecoveryIsNotBuffered()
+        {
+            PlayerHarness attacker = CreatePlayer("Attacker");
+            PlayerHarness defender = CreatePlayer("Defender");
+            double firstTimestamp = InputState.currentTime;
+            defender.Parry(firstTimestamp);
+            defender.ProcessFixed();
+            defender.Hitstun.ResetHitstun();
+            attacker.ArmLaunchAgainst(defender);
+
+            defender.Parry(firstTimestamp + 0.1d);
+            defender.ProcessFixed();
+
+            Assert.That(defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.OnRecovery));
+            Assert.That(defender.Input.PendingCombatCommandCount, Is.Zero);
+            Assert.That(attacker.Combat.HasArmedFinisher, Is.True);
+            Assert.That(attacker.Combat.FinisherDefensePhase, Is.Not.EqualTo(QusapFinisherDefensePhase.Parried));
+        }
+
+        [Test]
+        public void HeldTriggerDoesNotGenerateRepeatedAttempts()
+        {
+            Pair pair = CreateArmedPair();
+            int successCount = 0;
+            pair.Defender.Combat.ParrySucceeded += (_, _) => successCount++;
+            pair.Defender.Parry(pair.WindowMidpoint);
+
+            pair.Defender.ProcessFixed();
+            pair.Defender.ProcessFixed();
+            pair.Defender.ProcessFixed();
+
+            Assert.That(successCount, Is.EqualTo(1));
+            Assert.That(pair.Defender.Input.PendingCombatCommandCount, Is.Zero);
+        }
+
+        [Test]
+        public void RepeatedFreshPressesRespectRecovery()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            int failures = 0;
+            defender.Combat.ParryFailed += _ => failures++;
+            defender.Parry(20d);
+            defender.Parry(20.1d);
+            defender.Parry(20.2d);
+            defender.ProcessFixed();
+
+            Assert.That(failures, Is.EqualTo(1));
+            Assert.That(defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.OnRecovery));
+            Assert.That(defender.Input.PendingCombatCommandCount, Is.Zero);
+        }
+
+        [Test]
+        public void FailedAttemptDoesNotCancelLaunch()
+        {
+            AssertFailedAttemptDoesNotCancel(QusapComboId.Launch);
+        }
+
+        [Test]
+        public void FailedAttemptDoesNotCancelDamage()
+        {
+            AssertFailedAttemptDoesNotCancel(QusapComboId.Damage);
+        }
+
+        [Test]
+        public void FailedAttemptDoesNotCancelDisarm()
+        {
+            AssertFailedAttemptDoesNotCancel(QusapComboId.Disarm);
+        }
+
+        [Test]
+        public void SuccessfulParryStillCancelsLaunch()
+        {
+            Pair pair = CreateArmedPair();
+            pair.SuccessfulParry();
+            Assert.That(pair.Attacker.Combat.HasArmedFinisher, Is.False);
+            Assert.That(pair.Attacker.Combat.FinisherDefensePhase, Is.EqualTo(QusapFinisherDefensePhase.Parried));
+        }
+
+        [Test]
+        public void NewFinisherCanBeParriedAfterRecovery()
+        {
+            PlayerHarness attacker = CreatePlayer("Attacker");
+            PlayerHarness defender = CreatePlayer("Defender");
+            attacker.ArmLaunchAgainst(defender);
+            defender.Parry(attacker.Combat.ParryWindowOpensAt - 0.001d);
+            defender.ProcessFixed();
+            defender.Hitstun.ResetHitstun();
+            attacker.Combat.ResetCombatState();
+
+            attacker.ConfigureParrySettings(0.7d, 0.35d);
+            attacker.ArmLaunchAgainst(defender);
+            double timestamp = attacker.Combat.ParryWindowOpensAt + 0.01d;
+            defender.Parry(timestamp);
+            defender.ProcessFixed();
+
+            Assert.That(defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.Success));
+            Assert.That(attacker.Combat.HasArmedFinisher, Is.False);
+        }
+
+        [Test]
+        public void AttemptAgainstOneAttackerDoesNotConsumeAllIncomingFinishers()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            PlayerHarness first = CreatePlayer("First");
+            PlayerHarness second = CreatePlayer("Second");
+            first.ConfigureParrySettings(0.1d, 1d);
+            second.ConfigureParrySettings(0.1d, 1.2d);
+            first.ArmLaunchAgainst(defender);
+            second.ArmLaunchAgainst(defender);
+            double early = Math.Min(first.Combat.ParryWindowOpensAt, second.Combat.ParryWindowOpensAt) - 0.001d;
+            defender.Parry(early);
+            defender.ProcessFixed();
+            defender.Hitstun.ResetHitstun();
+
+            double retry = Math.Max(first.Combat.ParryWindowOpensAt, second.Combat.ParryWindowOpensAt) + 0.6d;
+            defender.Parry(retry);
+            defender.ProcessFixed();
+
+            Assert.That(first.Combat.HasArmedFinisher, Is.True);
+            Assert.That(second.Combat.HasArmedFinisher, Is.False);
+        }
+
+        [Test]
+        public void OnePressStillCannotCancelTwoFinishers()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            PlayerHarness first = CreatePlayer("First");
+            PlayerHarness second = CreatePlayer("Second");
+            first.ArmLaunchAgainst(defender);
+            second.ArmLaunchAgainst(defender);
+            defender.Parry(Math.Max(first.Combat.ParryWindowOpensAt, second.Combat.ParryWindowOpensAt) + 0.01d);
+            defender.ProcessFixed();
+
+            int remaining = (first.Combat.HasArmedFinisher ? 1 : 0)
+                + (second.Combat.HasArmedFinisher ? 1 : 0);
+            Assert.That(remaining, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void EarliestClosingWindowSelectionStillWorks()
+        {
+            PlayerHarness defender = CreatePlayer("Defender");
+            PlayerHarness early = CreatePlayer("Early");
+            PlayerHarness late = CreatePlayer("Late");
+            early.ConfigureParrySettings(0.1d, 0.2d);
+            late.ConfigureParrySettings(0.1d, 0.5d);
+            early.ArmLaunchAgainst(defender);
+            late.ArmLaunchAgainst(defender);
+            defender.Parry(Math.Max(early.Combat.ParryWindowOpensAt, late.Combat.ParryWindowOpensAt) + 0.01d);
+            defender.ProcessFixed();
+
+            Assert.That(early.Combat.HasArmedFinisher, Is.False);
+            Assert.That(late.Combat.HasArmedFinisher, Is.True);
+        }
+
+        [Test]
         public void OffensiveCommandsCannotStartAnotherAttackDuringWindow()
         {
             Pair pair = CreateArmedPair();
@@ -526,6 +734,19 @@ namespace Qusap.Tests
             return new Pair(attacker, defender);
         }
 
+        private void AssertFailedAttemptDoesNotCancel(QusapComboId comboId)
+        {
+            PlayerHarness attacker = CreatePlayer("Attacker");
+            PlayerHarness defender = CreatePlayer("Defender");
+            attacker.ArmComboAgainst(comboId, defender);
+            defender.Parry(attacker.Combat.ParryWindowOpensAt - 0.001d);
+            defender.ProcessFixed();
+
+            Assert.That(attacker.Combat.HasArmedFinisher, Is.True);
+            Assert.That(attacker.Combat.ArmedFinisherCombo, Is.EqualTo(comboId));
+            Assert.That(defender.Combat.LastParryAttemptOutcome, Is.EqualTo(QusapParryAttemptOutcome.TooEarly));
+        }
+
         private PlayerHarness CreatePlayer(string name)
         {
             PlayerHarness player = new(name);
@@ -563,6 +784,7 @@ namespace Qusap.Tests
         {
             private static int nextNameId;
             private readonly InputActionAsset inputAsset;
+            private double nextComboTimestamp = 10d;
 
             public PlayerHarness(string name)
             {
@@ -617,8 +839,13 @@ namespace Qusap.Tests
 
             public void ArmLaunchAgainst(PlayerHarness defender)
             {
-                QusapComboDefinition definition = FindDefinition(QusapComboId.Launch);
-                double timestamp = 10d;
+                ArmComboAgainst(QusapComboId.Launch, defender);
+            }
+
+            public void ArmComboAgainst(QusapComboId comboId, PlayerHarness defender)
+            {
+                QusapComboDefinition definition = FindDefinition(comboId);
+                double timestamp = nextComboTimestamp;
                 for (int i = 0; i < definition.StepCount - 1; i++)
                 {
                     if (i > 0)
@@ -630,6 +857,7 @@ namespace Qusap.Tests
                 }
 
                 timestamp += ValidDelay(definition.GetStep(definition.StepCount - 1));
+                nextComboTimestamp = timestamp;
                 Enqueue(definition.GetStep(definition.StepCount - 1).Command, timestamp);
                 ProcessFixed();
                 Assert.That(Combat.HasArmedFinisher, Is.True);

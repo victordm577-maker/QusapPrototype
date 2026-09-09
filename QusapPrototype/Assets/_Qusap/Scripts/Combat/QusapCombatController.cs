@@ -48,6 +48,9 @@ namespace Qusap
         [SerializeField] private QusapComboDefinition[] comboDefinitions = Array.Empty<QusapComboDefinition>();
         [SerializeField] private QusapFinisherParrySettings finisherParrySettings =
             QusapFinisherParrySettings.CreateDefault();
+        [SerializeField, InspectorName("Parry Attempt Recovery")]
+        private double parryAttemptRecoveryDuration =
+            QusapParryAttemptGate.DefaultRecoveryDuration;
 
         [Header("Parry cue (visual only)")]
         [SerializeField] private QusapParryCueVisualSettings parryCueVisualSettings =
@@ -81,6 +84,7 @@ namespace Qusap
         private readonly List<QusapCombatController> incomingFinishers = new();
         private readonly Queue<PendingParryResolution> pendingParryResolutions = new();
         private QusapFinisherParryStateMachine finisherDefense;
+        private QusapParryAttemptGate parryAttemptGate;
         private QusapCombatController armedFinisherDefender;
         private readonly Dictionary<QusapComboId, QusapComboFinisherDefinition>
             finisherDefinitionsByCombo = new();
@@ -88,8 +92,6 @@ namespace Qusap
         private bool inputEventsSubscribed;
         private bool suppressFinisherReset;
         private bool parryFailurePending;
-        private bool hasHandledParryPress;
-        private ulong lastHandledParryPressId;
         private bool finisherWindowEventEmitted;
         private bool finisherReadyEventEmitted;
         private bool finisherParriedEventEmitted;
@@ -155,6 +157,8 @@ namespace Qusap
         public double ParryWindowClosesAt => finisherDefense?.WindowClosesAt ?? 0d;
         public QusapParryCuePresenter ParryCuePresenter => parryCuePresenter;
         public QusapParryCueVisualSettings ParryCueVisualSettings => parryCueVisualSettings;
+        public double ParryAttemptRecoveryDuration => parryAttemptRecoveryDuration;
+        public QusapParryAttemptOutcome LastParryAttemptOutcome { get; private set; }
         public int IncomingFinisherCount
         {
             get
@@ -179,6 +183,7 @@ namespace Qusap
             groundSensor = GetComponent<QusapGroundSensor>();
             hitstunController = GetComponent<QusapHitstunController>();
             finisherDefense = new QusapFinisherParryStateMachine();
+            parryAttemptGate = new QusapParryAttemptGate(parryAttemptRecoveryDuration);
             InitializeComboRecognition();
             HitReceiver = GetComponent<QusapHitReceiver>();
             HitReceiver.HitReceived += HandleOwnerHitReceived;
@@ -219,6 +224,8 @@ namespace Qusap
         {
             finisherParrySettings ??= QusapFinisherParrySettings.CreateDefault();
             finisherParrySettings.ValidateSerializedValues();
+            parryAttemptRecoveryDuration = QusapParryAttemptGate.NormalizeRecoveryDuration(
+                parryAttemptRecoveryDuration);
         }
 
         private void ValidateParryCueVisualSettings()
@@ -293,6 +300,7 @@ namespace Qusap
             CancelIncomingFinishers();
             CancelCurrentAttack(false);
             ResetComboRecognition();
+            parryAttemptGate?.Reset();
         }
 
         private void OnDestroy()
@@ -1190,6 +1198,7 @@ namespace Qusap
         private void UnregisterIncomingFinisher(QusapCombatController attacker)
         {
             incomingFinishers.Remove(attacker);
+            ReleaseParryOpportunity(attacker);
         }
 
         private void CleanupIncomingFinishers()
@@ -1199,6 +1208,7 @@ namespace Qusap
                 QusapCombatController attacker = incomingFinishers[i];
                 if (attacker == null || !attacker.IsIncomingOpportunityFor(this))
                 {
+                    ReleaseParryOpportunity(attacker);
                     incomingFinishers.RemoveAt(i);
                 }
             }
@@ -1231,6 +1241,7 @@ namespace Qusap
             for (int i = 0; i < attackers.Length; i++)
             {
                 QusapCombatController attacker = attackers[i];
+                ReleaseParryOpportunity(attacker);
                 if (attacker != null && attacker.armedFinisherDefender == this)
                 {
                     attacker.CancelOutgoingFinisher();
@@ -1245,40 +1256,65 @@ namespace Qusap
                 return;
             }
 
-            if (hasHandledParryPress && press.PressId <= lastHandledParryPressId)
-            {
-                return;
-            }
-
-            hasHandledParryPress = true;
-            lastHandledParryPressId = press.PressId;
-            if (parryFailurePending)
-            {
-                return;
-            }
-
             CleanupIncomingFinishers();
-            if (!IsEligibleToParry())
+            bool eligible = IsEligibleToParry();
+            QusapCombatController selected = SelectIncomingFinisher(
+                press.Timestamp,
+                requireOpenWindow: true,
+                requireAvailableOpportunity: true);
+            if (selected == null)
+            {
+                selected = SelectIncomingFinisher(
+                    press.Timestamp,
+                    requireOpenWindow: false,
+                    requireAvailableOpportunity: true);
+            }
+
+            if (selected == null)
+            {
+                selected = SelectIncomingFinisher(
+                    press.Timestamp,
+                    requireOpenWindow: true,
+                    requireAvailableOpportunity: false);
+            }
+
+            if (selected == null)
+            {
+                selected = SelectIncomingFinisher(
+                    press.Timestamp,
+                    requireOpenWindow: false,
+                    requireAvailableOpportunity: false);
+            }
+
+            ulong? identity = selected != null ? GetParryOpportunityIdentity(selected) : null;
+            QusapFinisherDefensePhase sampledPhase = selected != null
+                ? selected.GetFinisherPhaseAt(press.Timestamp)
+                : QusapFinisherDefensePhase.None;
+            QusapParryAttemptGateResult gateResult = parryAttemptGate.ProcessPress(
+                press.PressId,
+                press.Timestamp,
+                identity,
+                sampledPhase,
+                eligible);
+            LastParryAttemptOutcome = gateResult.Outcome;
+
+            if (gateResult.Outcome == QusapParryAttemptOutcome.DuplicateOrStalePressIgnored
+                || gateResult.Outcome == QusapParryAttemptOutcome.InvalidTimestampIgnored
+                || gateResult.Outcome == QusapParryAttemptOutcome.OnRecovery
+                || gateResult.Outcome == QusapParryAttemptOutcome.AlreadyAttempted)
+            {
+                return;
+            }
+
+            if (!gateResult.ConsumedFinisherOpportunity || selected == null)
+            {
+                QueueFailedParry(gateResult.Outcome);
+                return;
+            }
+
+            if (!eligible)
             {
                 QueueFailedParry(QusapParryAttemptOutcome.Ineligible);
-                return;
-            }
-
-            if (incomingFinishers.Count == 0)
-            {
-                QueueFailedParry(QusapParryAttemptOutcome.NoIncomingFinisher);
-                return;
-            }
-
-            QusapCombatController selected = SelectIncomingFinisher(press.Timestamp, requireOpenWindow: true);
-            if (selected == null)
-            {
-                selected = SelectIncomingFinisher(press.Timestamp, requireOpenWindow: false);
-            }
-
-            if (selected == null)
-            {
-                QueueFailedParry(QusapParryAttemptOutcome.NoIncomingFinisher);
                 return;
             }
 
@@ -1286,6 +1322,7 @@ namespace Qusap
             QusapParryAttemptResult result = selected.finisherDefense.TryParry(
                 press.PressId,
                 press.Timestamp);
+            LastParryAttemptOutcome = result.Outcome;
             selected.PublishFinisherTransition(result.Transition);
 
             if (result.Succeeded)
@@ -1307,13 +1344,21 @@ namespace Qusap
 
         private QusapCombatController SelectIncomingFinisher(
             double timestamp,
-            bool requireOpenWindow)
+            bool requireOpenWindow,
+            bool requireAvailableOpportunity = false)
         {
             QusapCombatController selected = null;
             for (int i = 0; i < incomingFinishers.Count; i++)
             {
                 QusapCombatController candidate = incomingFinishers[i];
                 if (candidate == null || !candidate.IsIncomingOpportunityFor(this))
+                {
+                    continue;
+                }
+
+                ulong identity = GetParryOpportunityIdentity(candidate);
+                if (requireAvailableOpportunity
+                    && !parryAttemptGate.CanAttempt(identity, timestamp, eligible: true))
                 {
                     continue;
                 }
@@ -1338,6 +1383,36 @@ namespace Qusap
             return selected;
         }
 
+        private QusapFinisherDefensePhase GetFinisherPhaseAt(double timestamp)
+        {
+            if (!HasArmedFinisher || !IsFinite(timestamp))
+            {
+                return QusapFinisherDefensePhase.None;
+            }
+
+            if (timestamp < ParryWindowOpensAt)
+            {
+                return QusapFinisherDefensePhase.Telegraph;
+            }
+
+            return timestamp <= ParryWindowClosesAt
+                ? QusapFinisherDefensePhase.ParryWindow
+                : QusapFinisherDefensePhase.ReadyToResolve;
+        }
+
+        private static ulong GetParryOpportunityIdentity(QusapCombatController attacker)
+        {
+            return EntityId.ToULong(attacker.GetEntityId());
+        }
+
+        private void ReleaseParryOpportunity(QusapCombatController attacker)
+        {
+            if (attacker != null)
+            {
+                parryAttemptGate?.ReleaseFinisher(GetParryOpportunityIdentity(attacker));
+            }
+        }
+
         public bool TryGetCurrentParryCue(out QusapParryCueInfo cueInfo)
         {
             return TryGetCurrentParryCue(InputState.currentTime, out cueInfo);
@@ -1350,14 +1425,16 @@ namespace Qusap
             cueInfo = default;
             if (!IsFinite(timestamp)
                 || !IsEligibleToParry()
-                || parryFailurePending)
+                || parryFailurePending
+                || parryAttemptGate.IsOnRecovery(timestamp))
             {
                 return false;
             }
 
             QusapCombatController selected = SelectIncomingFinisher(
                 timestamp,
-                requireOpenWindow: true);
+                requireOpenWindow: true,
+                requireAvailableOpportunity: true);
             if (selected == null
                 || !selected.ArmedFinisherCombo.HasValue
                 || selected.ArmedFinisherTarget != HitReceiver)

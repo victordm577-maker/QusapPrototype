@@ -361,6 +361,80 @@ namespace Qusap.Tests
             Assert.That(pair.Attacker.Combat.FinisherDefensePhase, Is.EqualTo(QusapFinisherDefensePhase.Parried));
         }
 
+        [Test]
+        public void CueHidesAfterTooEarlyAttempt()
+        {
+            Pair pair = CreateArmedPair();
+            pair.Defender.RefreshCue(pair.WindowMidpoint);
+            AssertVisibleWindow(pair.Defender.Presenter);
+
+            pair.Defender.Parry(pair.Attacker.Combat.ParryWindowOpensAt - 0.001d);
+            pair.Defender.ProcessFixed();
+            pair.Defender.Hitstun.ResetHitstun();
+            pair.Defender.RefreshCue(pair.WindowMidpoint);
+
+            AssertHidden(pair.Defender.Presenter);
+        }
+
+        [Test]
+        public void CueDoesNotReappearForAlreadyAttemptedFinisher()
+        {
+            PlayerHarness attacker = CreatePlayer("Attacker");
+            PlayerHarness defender = CreatePlayer("Defender");
+            attacker.ConfigureParrySettings(0.1d, 1d);
+            attacker.ArmLaunchAgainst(defender);
+            defender.Parry(attacker.Combat.ParryWindowOpensAt - 0.001d);
+            defender.ProcessFixed();
+            defender.Hitstun.ResetHitstun();
+
+            defender.RefreshCue(attacker.Combat.ParryWindowOpensAt + 0.6d);
+
+            AssertHidden(defender.Presenter);
+            Assert.That(attacker.Combat.HasArmedFinisher, Is.True);
+        }
+
+        [Test]
+        public void CueAppearsForNewFinisherAfterRecovery()
+        {
+            PlayerHarness attacker = CreatePlayer("Attacker");
+            PlayerHarness defender = CreatePlayer("Defender");
+            attacker.ArmLaunchAgainst(defender);
+            defender.Parry(attacker.Combat.ParryWindowOpensAt - 0.001d);
+            defender.ProcessFixed();
+            defender.Hitstun.ResetHitstun();
+            attacker.Combat.ResetCombatState();
+
+            attacker.ConfigureParrySettings(0.7d, 0.35d);
+            attacker.ArmLaunchAgainst(defender);
+            defender.RefreshCue(attacker.Combat.ParryWindowOpensAt + 0.01d);
+
+            AssertVisibleWindow(defender.Presenter);
+            Assert.That(defender.Presenter.CurrentCue.Attacker, Is.SameAs(attacker.Combat));
+        }
+
+        [Test]
+        public void ExistingParryCueTestsStillPass()
+        {
+            Pair pair = CreateArmedPair();
+            SpriteRenderer renderer = pair.Defender.Presenter.CueRenderer;
+            pair.Defender.RefreshCue(pair.WindowMidpoint);
+
+            AssertVisibleWindow(pair.Defender.Presenter);
+            Assert.That(pair.Defender.Presenter.CueRenderer, Is.SameAs(renderer));
+            Assert.That(CountCueRenderers(pair.Defender), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ExistingComboAndFinisherTestsStillPass()
+        {
+            Pair pair = CreateArmedPair();
+            Assert.That(pair.Attacker.Combat.LastCompletedCombo, Is.EqualTo(QusapComboId.Launch));
+            pair.SuccessfulParry();
+
+            Assert.That(pair.Attacker.Combat.HasArmedFinisher, Is.False);
+            Assert.That(pair.Attacker.Combat.FinisherDefensePhase, Is.EqualTo(QusapFinisherDefensePhase.Parried));
+        }
+
         private Pair CreateArmedPair()
         {
             PlayerHarness attacker = CreatePlayer("Attacker");

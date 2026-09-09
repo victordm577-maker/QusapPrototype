@@ -21,6 +21,8 @@ namespace Qusap
         TooLate,
         NoIncomingFinisher,
         Ineligible,
+        OnRecovery,
+        AlreadyAttempted,
         DuplicateOrStalePressIgnored,
         InvalidTimestampIgnored
     }

@@ -32,6 +32,37 @@ Transform:
   - {fileID: 6958856602192285221}
   m_Father: {fileID: 994108910110026543}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &129089894100975515
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6803010986654173374}
+  m_Layer: 0
+  m_Name: WeaponSocket
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6803010986654173374
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 129089894100975515}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 5325412706929704266}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &141443241795406458
 GameObject:
   m_ObjectHideFlags: 0
@@ -458,6 +489,8 @@ GameObject:
   - component: {fileID: 7623187612098060889}
   - component: {fileID: 8001818999779774919}
   - component: {fileID: 8392171379635640032}
+  - component: {fileID: 1608209498019051649}
+  - component: {fileID: 1868079215355723335}
   m_Layer: 0
   m_Name: QusapCombatPlayer
   m_TagString: Untagged
@@ -481,6 +514,7 @@ Transform:
   - {fileID: 7623187612098060882}
   - {fileID: 322502664837926396}
   - {fileID: 2046542455800818751}
+  - {fileID: 6803010986654173374}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &1022114235963455426
@@ -833,6 +867,37 @@ MonoBehaviour:
   verticalOffset: 0.04
   flashColor: {r: 1, g: 0.35, b: 0.2, a: 1}
   flashIntensity: 0.65
+--- !u!114 &1608209498019051649
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4561029578319102087}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a3a15b376dc2b04e9c38b309906ec67, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapWeaponEquipment
+--- !u!114 &1868079215355723335
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4561029578319102087}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f79fdcda436d0f44a84733d300eb03a6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapEquippedWeaponPresenter
+  equipment: {fileID: 1608209498019051649}
+  combatController: {fileID: 7623187612098060892}
+  catalog: {fileID: 11400000, guid: 1c1270a75de81794dad46421412c5439, type: 2}
+  weaponSocket: {fileID: 6803010986654173374}
+  socketOffset: {x: 1.15, y: 0.25, z: -0.35}
+  socketEulerAngles: {x: 0, y: 0, z: -12}
+  visualScale: {x: 0.7, y: 0.7, z: 0.7}
 --- !u!1 &4858569073240883571
 GameObject:
   m_ObjectHideFlags: 0

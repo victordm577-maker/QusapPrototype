@@ -192,6 +192,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff433a0951bea2f4e8d317574e5cacf6, type: 3}
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapInputReader
+--- !u!114 &153628803 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1868079215355723335, guid: 8745b905f7b2b2a43adab889939a4fb6, type: 3}
+  m_PrefabInstance: {fileID: 153628800}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f79fdcda436d0f44a84733d300eb03a6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapEquippedWeaponPresenter
+--- !u!114 &153628804 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1608209498019051649, guid: 8745b905f7b2b2a43adab889939a4fb6, type: 3}
+  m_PrefabInstance: {fileID: 153628800}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a3a15b376dc2b04e9c38b309906ec67, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapWeaponEquipment
 --- !u!1001 &185026867
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -226,6 +248,60 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 794869206, guid: b618c0e2e2904db6ba819dd685b94ff2, type: 3}
   m_PrefabInstance: {fileID: 185026867}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &395847088
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 395847090}
+  - component: {fileID: 395847089}
+  m_Layer: 0
+  m_Name: WeaponMatchBootstrap
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &395847089
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 395847088}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6033f0e092350a34da187dd9616fbdca, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapWeaponMatchBootstrap
+  catalog: {fileID: 11400000, guid: 1c1270a75de81794dad46421412c5439, type: 2}
+  playerOneEquipment: {fileID: 153628804}
+  playerOnePresenter: {fileID: 153628803}
+  playerTwoEquipment: {fileID: 1076020191}
+  playerTwoPresenter: {fileID: 1076020190}
+  droppedStartHeight: 0.35
+  droppedStartForwardOffset: 0.95
+  droppedOutwardDistance: 0.55
+  droppedFallDistance: 0.7
+  droppedDuration: 0.4
+--- !u!4 &395847090
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 395847088}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &752117105
 GameObject:
   m_ObjectHideFlags: 0
@@ -497,6 +573,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff433a0951bea2f4e8d317574e5cacf6, type: 3}
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Qusap.QusapInputReader
+--- !u!114 &1076020190 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1868079215355723335, guid: 8745b905f7b2b2a43adab889939a4fb6, type: 3}
+  m_PrefabInstance: {fileID: 1076020187}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f79fdcda436d0f44a84733d300eb03a6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapEquippedWeaponPresenter
+--- !u!114 &1076020191 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1608209498019051649, guid: 8745b905f7b2b2a43adab889939a4fb6, type: 3}
+  m_PrefabInstance: {fileID: 1076020187}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a3a15b376dc2b04e9c38b309906ec67, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapWeaponEquipment
 --- !u!1 &1143268094
 GameObject:
   m_ObjectHideFlags: 0
@@ -1026,3 +1124,4 @@ SceneRoots:
   - {fileID: 1076020187}
   - {fileID: 752117109}
   - {fileID: 1806457438}
+  - {fileID: 395847090}

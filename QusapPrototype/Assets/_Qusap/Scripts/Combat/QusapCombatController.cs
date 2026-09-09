@@ -49,6 +49,10 @@ namespace Qusap
         [SerializeField] private QusapFinisherParrySettings finisherParrySettings =
             QusapFinisherParrySettings.CreateDefault();
 
+        [Header("Parry cue (visual only)")]
+        [SerializeField] private QusapParryCueVisualSettings parryCueVisualSettings =
+            QusapParryCueVisualSettings.CreateDefault();
+
         [Header("Combo finishers")]
         [SerializeField] private QusapComboFinisherDefinition[] finisherDefinitions =
             QusapComboFinisherDefinition.CreateDefaultDefinitions();
@@ -89,6 +93,7 @@ namespace Qusap
         private bool finisherWindowEventEmitted;
         private bool finisherReadyEventEmitted;
         private bool finisherParriedEventEmitted;
+        private QusapParryCuePresenter parryCuePresenter;
 
         // Legacy events remain available to avoid breaking existing integrations.
         public event Action<QusapAttackType> AttackStarted;
@@ -148,6 +153,8 @@ namespace Qusap
             HasArmedFinisher && (finisherDefense?.IsReadyToResolve ?? false);
         public double ParryWindowOpensAt => finisherDefense?.WindowOpensAt ?? 0d;
         public double ParryWindowClosesAt => finisherDefense?.WindowClosesAt ?? 0d;
+        public QusapParryCuePresenter ParryCuePresenter => parryCuePresenter;
+        public QusapParryCueVisualSettings ParryCueVisualSettings => parryCueVisualSettings;
         public int IncomingFinisherCount
         {
             get
@@ -194,6 +201,7 @@ namespace Qusap
             }
 
             attackHitbox.Initialize(this);
+            EnsureParryCuePresenter();
         }
 
         private void OnValidate()
@@ -201,14 +209,22 @@ namespace Qusap
             facingInputThreshold = Mathf.Max(facingInputThreshold, 0f);
             initialFacingDirection = initialFacingDirection < 0 ? -1 : 1;
             ValidateFinisherParrySettings();
+            ValidateParryCueVisualSettings();
             ValidateFinisherDefinitions();
             ValidateAttackData();
+            parryCuePresenter?.Configure(parryCueVisualSettings);
         }
 
         private void ValidateFinisherParrySettings()
         {
             finisherParrySettings ??= QusapFinisherParrySettings.CreateDefault();
             finisherParrySettings.ValidateSerializedValues();
+        }
+
+        private void ValidateParryCueVisualSettings()
+        {
+            parryCueVisualSettings ??= QusapParryCueVisualSettings.CreateDefault();
+            parryCueVisualSettings.ValidateSerializedValues();
         }
 
         private void ValidateFinisherDefinitions()
@@ -273,6 +289,7 @@ namespace Qusap
         private void OnDisable()
         {
             UnsubscribeInputEvents();
+            parryCuePresenter?.ResetPresentation();
             CancelIncomingFinishers();
             CancelCurrentAttack(false);
             ResetComboRecognition();
@@ -521,6 +538,7 @@ namespace Qusap
 
         public void ResetCombatState()
         {
+            parryCuePresenter?.ResetForRespawn();
             CancelCurrentAttack(true);
             ResetComboRecognition();
             DiveHeadbuttAvailable = true;
@@ -1239,15 +1257,8 @@ namespace Qusap
                 return;
             }
 
-            bool eligible = combatAllowed
-                && isActiveAndEnabled
-                && gameObject.activeInHierarchy
-                && !IsAttacking
-                && (dashMotor == null || !dashMotor.IsDashing)
-                && (hitstunController == null || !hitstunController.IsInHitstun);
-
             CleanupIncomingFinishers();
-            if (!eligible)
+            if (!IsEligibleToParry())
             {
                 QueueFailedParry(QusapParryAttemptOutcome.Ineligible);
                 return;
@@ -1302,6 +1313,11 @@ namespace Qusap
             for (int i = 0; i < incomingFinishers.Count; i++)
             {
                 QusapCombatController candidate = incomingFinishers[i];
+                if (candidate == null || !candidate.IsIncomingOpportunityFor(this))
+                {
+                    continue;
+                }
+
                 bool timestampInside = timestamp >= candidate.ParryWindowOpensAt
                     && timestamp <= candidate.ParryWindowClosesAt;
                 if (requireOpenWindow != timestampInside)
@@ -1320,6 +1336,70 @@ namespace Qusap
             }
 
             return selected;
+        }
+
+        public bool TryGetCurrentParryCue(out QusapParryCueInfo cueInfo)
+        {
+            return TryGetCurrentParryCue(InputState.currentTime, out cueInfo);
+        }
+
+        internal bool TryGetCurrentParryCue(
+            double timestamp,
+            out QusapParryCueInfo cueInfo)
+        {
+            cueInfo = default;
+            if (!IsFinite(timestamp)
+                || !IsEligibleToParry()
+                || parryFailurePending)
+            {
+                return false;
+            }
+
+            QusapCombatController selected = SelectIncomingFinisher(
+                timestamp,
+                requireOpenWindow: true);
+            if (selected == null
+                || !selected.ArmedFinisherCombo.HasValue
+                || selected.ArmedFinisherTarget != HitReceiver)
+            {
+                return false;
+            }
+
+            cueInfo = new QusapParryCueInfo(
+                selected,
+                this,
+                selected.ArmedFinisherCombo.Value,
+                selected.ParryWindowOpensAt,
+                selected.ParryWindowClosesAt,
+                timestamp);
+            return true;
+        }
+
+        private bool IsEligibleToParry()
+        {
+            return combatAllowed
+                && isActiveAndEnabled
+                && gameObject.activeInHierarchy
+                && !IsAttacking
+                && (dashMotor == null || !dashMotor.IsDashing)
+                && (hitstunController == null || !hitstunController.IsInHitstun);
+        }
+
+        private void EnsureParryCuePresenter()
+        {
+            ValidateParryCueVisualSettings();
+            parryCuePresenter = GetComponent<QusapParryCuePresenter>();
+            if (parryCuePresenter == null)
+            {
+                parryCuePresenter = gameObject.AddComponent<QusapParryCuePresenter>();
+            }
+
+            parryCuePresenter.Initialize(this, parryCueVisualSettings);
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
         private void QueueFailedParry(QusapParryAttemptOutcome outcome)

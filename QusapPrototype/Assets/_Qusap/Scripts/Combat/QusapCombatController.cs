@@ -56,6 +56,10 @@ namespace Qusap
         [SerializeField] private QusapParryCueVisualSettings parryCueVisualSettings =
             QusapParryCueVisualSettings.CreateDefault();
 
+        [Header("Combat feedback (visual only)")]
+        [SerializeField] private QusapCombatFeedbackSettings combatFeedbackSettings =
+            QusapCombatFeedbackSettings.CreateDefault();
+
         [Header("Combo finishers")]
         [SerializeField] private QusapComboFinisherDefinition[] finisherDefinitions =
             QusapComboFinisherDefinition.CreateDefaultDefinitions();
@@ -96,6 +100,9 @@ namespace Qusap
         private bool finisherReadyEventEmitted;
         private bool finisherParriedEventEmitted;
         private QusapParryCuePresenter parryCuePresenter;
+        private QusapCombatFeedbackPresenter combatFeedbackPresenter;
+        private ulong nextFinisherSequenceId;
+        private ulong armedFinisherSequenceId;
 
         // Legacy events remain available to avoid breaking existing integrations.
         public event Action<QusapAttackType> AttackStarted;
@@ -115,6 +122,7 @@ namespace Qusap
         public event Action<QusapComboId, QusapHitReceiver> FinisherReadyToResolve;
         public event Action<QusapCombatController, QusapComboId> ParrySucceeded;
         public event Action<QusapParryAttemptOutcome> ParryFailed;
+        public event Action<QusapParryAttemptFeedback> ParryAttemptFinished;
         public event Action<QusapFinisherResolution> FinisherResolved;
 
         public bool CombatAllowed
@@ -125,6 +133,7 @@ namespace Qusap
                 combatAllowed = value;
                 if (!combatAllowed)
                 {
+                    combatFeedbackPresenter?.ResetPresentation();
                     CancelIncomingFinishers();
                     CancelCurrentAttack(false);
                     ResetComboRecognition();
@@ -157,6 +166,8 @@ namespace Qusap
         public double ParryWindowClosesAt => finisherDefense?.WindowClosesAt ?? 0d;
         public QusapParryCuePresenter ParryCuePresenter => parryCuePresenter;
         public QusapParryCueVisualSettings ParryCueVisualSettings => parryCueVisualSettings;
+        public QusapCombatFeedbackPresenter CombatFeedbackPresenter => combatFeedbackPresenter;
+        public QusapCombatFeedbackSettings CombatFeedbackSettings => combatFeedbackSettings;
         public double ParryAttemptRecoveryDuration => parryAttemptRecoveryDuration;
         public QusapParryAttemptOutcome LastParryAttemptOutcome { get; private set; }
         public int IncomingFinisherCount
@@ -207,6 +218,7 @@ namespace Qusap
 
             attackHitbox.Initialize(this);
             EnsureParryCuePresenter();
+            EnsureCombatFeedbackPresenter();
         }
 
         private void OnValidate()
@@ -215,9 +227,11 @@ namespace Qusap
             initialFacingDirection = initialFacingDirection < 0 ? -1 : 1;
             ValidateFinisherParrySettings();
             ValidateParryCueVisualSettings();
+            ValidateCombatFeedbackSettings();
             ValidateFinisherDefinitions();
             ValidateAttackData();
             parryCuePresenter?.Configure(parryCueVisualSettings);
+            combatFeedbackPresenter?.Configure(combatFeedbackSettings);
         }
 
         private void ValidateFinisherParrySettings()
@@ -232,6 +246,12 @@ namespace Qusap
         {
             parryCueVisualSettings ??= QusapParryCueVisualSettings.CreateDefault();
             parryCueVisualSettings.ValidateSerializedValues();
+        }
+
+        private void ValidateCombatFeedbackSettings()
+        {
+            combatFeedbackSettings ??= QusapCombatFeedbackSettings.CreateDefault();
+            combatFeedbackSettings.ValidateSerializedValues();
         }
 
         private void ValidateFinisherDefinitions()
@@ -297,6 +317,7 @@ namespace Qusap
         {
             UnsubscribeInputEvents();
             parryCuePresenter?.ResetPresentation();
+            combatFeedbackPresenter?.ResetPresentation();
             CancelIncomingFinishers();
             CancelCurrentAttack(false);
             ResetComboRecognition();
@@ -547,6 +568,7 @@ namespace Qusap
         public void ResetCombatState()
         {
             parryCuePresenter?.ResetForRespawn();
+            combatFeedbackPresenter?.ResetForRespawn();
             CancelCurrentAttack(true);
             ResetComboRecognition();
             DiveHeadbuttAvailable = true;
@@ -817,6 +839,13 @@ namespace Qusap
         private void ArmFinisher(QusapComboId comboId, QusapHitReceiver target)
         {
             CancelOutgoingFinisher();
+            nextFinisherSequenceId++;
+            if (nextFinisherSequenceId == 0)
+            {
+                nextFinisherSequenceId++;
+            }
+
+            armedFinisherSequenceId = nextFinisherSequenceId;
             HasArmedFinisher = true;
             ArmedFinisherCombo = comboId;
             ArmedFinisherTarget = target;
@@ -867,6 +896,7 @@ namespace Qusap
             ArmedFinisherCombo = null;
             ArmedFinisherTarget = null;
             armedFinisherDirection = 1;
+            armedFinisherSequenceId = 0;
             finisherDefense.Reset();
             return true;
         }
@@ -1090,6 +1120,7 @@ namespace Qusap
             ArmedFinisherCombo = null;
             ArmedFinisherTarget = null;
             armedFinisherDirection = 1;
+            armedFinisherSequenceId = 0;
 
             if (!finisherParriedEventEmitted)
             {
@@ -1132,6 +1163,7 @@ namespace Qusap
             ArmedFinisherCombo = null;
             ArmedFinisherTarget = null;
             armedFinisherDirection = 1;
+            armedFinisherSequenceId = 0;
         }
 
         private void UnregisterFromFinisherDefender()
@@ -1299,21 +1331,29 @@ namespace Qusap
             LastParryAttemptOutcome = gateResult.Outcome;
 
             if (gateResult.Outcome == QusapParryAttemptOutcome.DuplicateOrStalePressIgnored
-                || gateResult.Outcome == QusapParryAttemptOutcome.InvalidTimestampIgnored
-                || gateResult.Outcome == QusapParryAttemptOutcome.OnRecovery
+                || gateResult.Outcome == QusapParryAttemptOutcome.InvalidTimestampIgnored)
+            {
+                return;
+            }
+
+            if (gateResult.Outcome == QusapParryAttemptOutcome.OnRecovery
                 || gateResult.Outcome == QusapParryAttemptOutcome.AlreadyAttempted)
             {
+                PublishParryAttemptFeedback(press, selected, gateResult.Outcome);
                 return;
             }
 
             if (!gateResult.ConsumedFinisherOpportunity || selected == null)
             {
+                PublishParryAttemptFeedback(press, selected, gateResult.Outcome);
                 QueueFailedParry(gateResult.Outcome);
                 return;
             }
 
             if (!eligible)
             {
+                PublishParryAttemptFeedback(
+                    press, selected, QusapParryAttemptOutcome.Ineligible);
                 QueueFailedParry(QusapParryAttemptOutcome.Ineligible);
                 return;
             }
@@ -1324,6 +1364,7 @@ namespace Qusap
                 press.Timestamp);
             LastParryAttemptOutcome = result.Outcome;
             selected.PublishFinisherTransition(result.Transition);
+            PublishParryAttemptFeedback(press, selected, result.Outcome);
 
             if (result.Succeeded)
             {
@@ -1472,6 +1513,39 @@ namespace Qusap
             }
 
             parryCuePresenter.Initialize(this, parryCueVisualSettings);
+        }
+
+        private void EnsureCombatFeedbackPresenter()
+        {
+            ValidateCombatFeedbackSettings();
+            combatFeedbackPresenter = GetComponent<QusapCombatFeedbackPresenter>();
+            if (combatFeedbackPresenter == null)
+            {
+                combatFeedbackPresenter = gameObject.AddComponent<QusapCombatFeedbackPresenter>();
+            }
+
+            combatFeedbackPresenter.Initialize(this, combatFeedbackSettings);
+        }
+
+        private void PublishParryAttemptFeedback(
+            QusapCombatCommandPress press,
+            QusapCombatController attacker,
+            QusapParryAttemptOutcome outcome)
+        {
+            QusapComboId? comboId = attacker != null
+                ? attacker.ArmedFinisherCombo
+                : null;
+            ulong sequenceId = attacker != null
+                ? attacker.armedFinisherSequenceId
+                : 0;
+            ParryAttemptFinished?.Invoke(new QusapParryAttemptFeedback(
+                press.PressId,
+                press.Timestamp,
+                attacker,
+                this,
+                comboId,
+                sequenceId,
+                outcome));
         }
 
         private static bool IsFinite(double value)

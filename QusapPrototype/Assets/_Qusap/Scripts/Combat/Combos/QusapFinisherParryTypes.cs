@@ -162,4 +162,35 @@ namespace Qusap
         public QusapFinisherDefenseTransition Transition { get; }
         public bool Succeeded => Outcome == QusapParryAttemptOutcome.Success;
     }
+
+    public readonly struct QusapParryAttemptFeedback
+    {
+        internal QusapParryAttemptFeedback(
+            ulong pressId,
+            double timestamp,
+            QusapCombatController attacker,
+            QusapCombatController defender,
+            QusapComboId? comboId,
+            ulong finisherSequenceId,
+            QusapParryAttemptOutcome outcome)
+        {
+            PressId = pressId;
+            Timestamp = timestamp;
+            Attacker = attacker;
+            Defender = defender;
+            ComboId = comboId;
+            FinisherSequenceId = finisherSequenceId;
+            Outcome = outcome;
+        }
+
+        public ulong PressId { get; }
+        public double Timestamp { get; }
+        public QusapCombatController Attacker { get; }
+        public QusapCombatController Defender { get; }
+        public QusapComboId? ComboId { get; }
+        public ulong FinisherSequenceId { get; }
+        public QusapParryAttemptOutcome Outcome { get; }
+        public bool HasIncomingFinisher => Attacker != null && ComboId.HasValue;
+        public bool Succeeded => Outcome == QusapParryAttemptOutcome.Success;
+    }
 }

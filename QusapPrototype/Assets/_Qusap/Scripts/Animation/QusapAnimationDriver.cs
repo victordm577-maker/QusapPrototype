@@ -78,6 +78,9 @@ namespace Qusap
 
         private void Awake()
         {
+            if (!enabled)
+                return;
+
             rb = GetComponent<Rigidbody>();
             groundSensor = GetComponent<QusapGroundSensor>();
             inputReader = GetComponent<QusapInputReader>();

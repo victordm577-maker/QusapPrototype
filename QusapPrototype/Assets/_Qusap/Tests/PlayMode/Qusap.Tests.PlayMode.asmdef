@@ -2,7 +2,8 @@
   "name": "Qusap.Tests.PlayMode",
   "references": [
     "Qusap.Runtime",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Unity.InputSystem.TestFramework"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

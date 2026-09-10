@@ -236,6 +236,7 @@ namespace Qusap.Tests
                 AssertSingleComponent<QusapWeaponEquipment>(root);
                 AssertSingleComponent<QusapEquippedWeaponPresenter>(root);
                 AssertSingleComponent<QusapWeaponAttackVisualPresenter>(root);
+                AssertSingleComponent<QusapModularCombatVisualPresenter>(root);
                 AssertSingleComponent<QusapModularVisualRig>(root);
                 AssertSingleComponent<QusapModularFacingPresenter>(root);
             });
@@ -260,7 +261,10 @@ namespace Qusap.Tests
                 Transform facingPivot = alignment.Find("ModularFacingPivot");
                 Assert.That(facingPivot, Is.Not.Null);
                 Assert.That(facingPivot.localScale, Is.EqualTo(Vector3.one));
-                Assert.That(facingPivot.GetComponentInChildren<QusapModularVisualRig>(true), Is.Not.Null);
+                Transform capturePivot = facingPivot.Find("CombatFacingCapturePivot");
+                Assert.That(capturePivot, Is.Not.Null);
+                Assert.That(capturePivot.localScale, Is.EqualTo(Vector3.one));
+                Assert.That(capturePivot.GetComponentInChildren<QusapModularVisualRig>(true), Is.Not.Null);
 
                 Transform[] sockets = root.GetComponentsInChildren<Transform>(true)
                     .Where(item => item.name == "WeaponSocket").ToArray();

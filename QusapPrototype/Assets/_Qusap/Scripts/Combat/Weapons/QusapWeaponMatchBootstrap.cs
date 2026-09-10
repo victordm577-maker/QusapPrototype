@@ -31,8 +31,12 @@ namespace Qusap
         [SerializeField] private float upThrowHorizontalDistance = 0.8f;
         [SerializeField] private float upThrowArcHeight = 4.0f;
         [SerializeField] private float upThrowDuration = 0.70f;
+        [SerializeField] private QusapThrownWeaponAttackProfile thrownWeaponAttackProfile =
+            new();
+        [SerializeField] private LayerMask thrownWeaponTargetLayers = 1;
 
         private readonly QusapWeaponIdGenerator idGenerator = new();
+        private readonly QusapWeaponThrowIdGenerator throwIdGenerator = new();
         private readonly List<QusapDroppedWeaponView> droppedWeapons = new();
         private readonly HashSet<ulong> representedDroppedIds = new();
         private readonly List<RuntimePickupCandidate> pickupCandidates = new(16);
@@ -60,6 +64,9 @@ namespace Qusap
             pickupResolver?.PreviousOwnerLockout
             ?? QusapWeaponPickupResolver.NormalizePreviousOwnerLockout(
                 previousOwnerPickupLockout);
+        public QusapThrownWeaponAttackProfile ThrownWeaponAttackProfile =>
+            thrownWeaponAttackProfile;
+        public LayerMask ThrownWeaponTargetLayers => thrownWeaponTargetLayers;
 
         private void Update()
         {
@@ -117,6 +124,7 @@ namespace Qusap
                 QusapWeaponPickupResolver.NormalizePreviousOwnerLockout(
                     previousOwnerPickupLockout);
             NormalizeThrowProfiles();
+            NormalizeThrownWeaponAttack();
         }
 
         public void Configure(
@@ -168,6 +176,25 @@ namespace Qusap
             initialWhiteWeaponPosition = position;
         }
 
+        public void ConfigureThrownWeaponAttack(
+            QusapThrownWeaponAttackProfile profile,
+            LayerMask targetLayers)
+        {
+            if (initialized || profile == null || targetLayers.value == 0)
+            {
+                return;
+            }
+
+            thrownWeaponAttackProfile = new QusapThrownWeaponAttackProfile(
+                profile.Damage,
+                profile.HitstunDuration,
+                profile.HorizontalKnockback,
+                profile.VerticalKnockback,
+                profile.DetectionRadius,
+                profile.OffensiveDuration);
+            thrownWeaponTargetLayers = targetLayers;
+        }
+
         public bool TryInitialize()
         {
             if (initialized)
@@ -184,6 +211,7 @@ namespace Qusap
                 pickupRadius,
                 previousOwnerPickupLockout);
             NormalizeThrowProfiles();
+            NormalizeThrownWeaponAttack();
 
             if (!ValidateConfiguration()
                 || !playerOnePresenter.TryInitialize()
@@ -316,11 +344,21 @@ namespace Qusap
                 ? presenter.WeaponSocket.position
                 : presenter.transform.position;
             origin.z = presenter.transform.position.z;
-            if (!IsFinite(origin))
+            QusapCombatController capturedThrower =
+                equipment.GetComponent<QusapCombatController>();
+            ulong capturedThrowerEntityId = capturedThrower != null
+                ? EntityId.ToULong(capturedThrower.GetEntityId())
+                : 0;
+            if (!IsFinite(origin)
+                || capturedThrowerEntityId != equipment.OwnerEntityId
+                || thrownWeaponAttackProfile == null
+                || thrownWeaponTargetLayers.value == 0)
             {
                 selected.ReleaseReservation(equipment.OwnerEntityId);
                 return false;
             }
+
+            ulong throwId = throwIdGenerator.Next();
 
             QusapWeaponOperationResult result = equipment.TryVoluntarySwap(
                 original,
@@ -346,8 +384,12 @@ namespace Qusap
                     press.Direction,
                     press.FacingDirection,
                     GetThrowProfile(press.Direction),
+                    throwId,
                     equipment.OwnerEntityId,
-                    currentTimestamp))
+                    currentTimestamp,
+                    capturedThrower,
+                    thrownWeaponAttackProfile,
+                    thrownWeaponTargetLayers))
             {
                 if (thrown != null)
                 {
@@ -607,6 +649,16 @@ namespace Qusap
             upThrowHorizontalDistance = up.HorizontalDistance;
             upThrowArcHeight = up.ArcHeight;
             upThrowDuration = up.Duration;
+        }
+
+        private void NormalizeThrownWeaponAttack()
+        {
+            thrownWeaponAttackProfile ??= new QusapThrownWeaponAttackProfile();
+            thrownWeaponAttackProfile.Normalize();
+            if (thrownWeaponTargetLayers.value == 0)
+            {
+                thrownWeaponTargetLayers = 1;
+            }
         }
 
         private bool ValidateConfiguration()

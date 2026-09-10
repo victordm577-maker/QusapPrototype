@@ -297,6 +297,16 @@ MonoBehaviour:
   upThrowHorizontalDistance: 0.8
   upThrowArcHeight: 4
   upThrowDuration: 0.7
+  thrownWeaponAttackProfile:
+    damage: 6
+    hitstunDuration: 0.2
+    horizontalKnockback: 6
+    verticalKnockback: 1.5
+    detectionRadius: 0.35
+    offensiveDuration: 0.6
+  thrownWeaponTargetLayers:
+    serializedVersion: 2
+    m_Bits: 1
 --- !u!4 &395847090
 Transform:
   m_ObjectHideFlags: 0

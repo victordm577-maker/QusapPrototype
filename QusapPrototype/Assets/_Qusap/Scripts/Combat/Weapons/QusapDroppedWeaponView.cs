@@ -5,6 +5,8 @@ namespace Qusap
     [DisallowMultipleComponent]
     public sealed class QusapDroppedWeaponView : MonoBehaviour
     {
+        private const int PhysicsQueryCapacity = 32;
+
         public const float DefaultDuration = 0.40f;
         public const float DefaultOutwardDistance = 0.55f;
         public const float DefaultFallDistance = 0.70f;
@@ -29,6 +31,18 @@ namespace Qusap
         private QusapWeaponReleaseType releaseType;
         private QusapWeaponThrowDirection throwDirection;
         private int capturedFacingDirection;
+        private readonly RaycastHit[] sweepHits = new RaycastHit[PhysicsQueryCapacity];
+        private readonly Collider[] overlapHits = new Collider[PhysicsQueryCapacity];
+        private readonly RuntimeTargetCandidate[] targetCandidates =
+            new RuntimeTargetCandidate[PhysicsQueryCapacity];
+        private readonly bool[] attemptedCandidates = new bool[PhysicsQueryCapacity];
+        private QusapThrownWeaponAttackState attackState;
+        private QusapThrownWeaponAttackProfile attackProfile;
+        private QusapCombatController thrower;
+        private LayerMask targetLayers;
+        private bool resolvingImpact;
+        private int confirmedImpactCount;
+        private QusapHitReceiver confirmedTarget;
 
         public QusapWeaponInstance Weapon => weapon;
         public ulong InstanceId => weapon?.InstanceId ?? 0;
@@ -45,6 +59,13 @@ namespace Qusap
         public QusapWeaponReleaseType ReleaseType => releaseType;
         public QusapWeaponThrowDirection ThrowDirection => throwDirection;
         public int CapturedFacingDirection => capturedFacingDirection;
+        public QusapThrownWeaponAttackState AttackState => attackState;
+        public QusapThrownWeaponAttackProfile AttackProfile => attackProfile;
+        public bool IsOffensive => attackState?.IsOffensive ?? false;
+        public ulong ThrowId => attackState?.ThrowId ?? 0;
+        public ulong ThrowerEntityId => attackState?.ThrowerEntityId ?? 0;
+        public int ConfirmedImpactCount => confirmedImpactCount;
+        public QusapHitReceiver ConfirmedTarget => confirmedTarget;
 
         private void Update()
         {
@@ -79,7 +100,7 @@ namespace Qusap
             }
 
             int direction = outwardDirection < 0 ? -1 : 1;
-            return CompleteInitialization(
+            bool completed = CompleteInitialization(
                 droppedWeapon,
                 droppedVisualPrefab,
                 origin,
@@ -94,6 +115,17 @@ namespace Qusap
                 formerOwnerEntityId,
                 dropTimestamp,
                 false);
+            if (completed)
+            {
+                attackState = CreateNonOffensiveState(
+                    droppedWeapon,
+                    QusapWeaponReleaseType.Disarmed,
+                    QusapWeaponThrowDirection.Forward,
+                    direction,
+                    dropTimestamp);
+            }
+
+            return completed;
         }
 
         public bool InitializeVoluntaryThrow(
@@ -103,9 +135,16 @@ namespace Qusap
             QusapWeaponThrowDirection direction,
             int capturedFacing,
             QusapWeaponThrowTrajectoryProfile profile,
+            ulong throwId,
             ulong formerOwnerEntityId,
-            double dropTimestamp)
+            double dropTimestamp,
+            QusapCombatController capturedThrower,
+            QusapThrownWeaponAttackProfile configuredAttackProfile,
+            LayerMask configuredTargetLayers)
         {
+            ulong capturedThrowerEntityId = capturedThrower != null
+                ? EntityId.ToULong(capturedThrower.GetEntityId())
+                : 0;
             if (!ValidateInitialization(
                     droppedWeapon,
                     droppedVisualPrefab,
@@ -114,13 +153,33 @@ namespace Qusap
                     profile.HorizontalDistance,
                     DefaultFallDistance,
                     formerOwnerEntityId,
-                    dropTimestamp))
+                    dropTimestamp)
+                || throwId == 0
+                || capturedThrowerEntityId != formerOwnerEntityId
+                || configuredAttackProfile == null
+                || configuredTargetLayers.value == 0)
             {
                 return false;
             }
 
             int facing = capturedFacing < 0 ? -1 : 1;
-            return CompleteInitialization(
+            QusapThrownWeaponAttackProfile normalizedAttackProfile = new(
+                configuredAttackProfile.Damage,
+                configuredAttackProfile.HitstunDuration,
+                configuredAttackProfile.HorizontalKnockback,
+                configuredAttackProfile.VerticalKnockback,
+                configuredAttackProfile.DetectionRadius,
+                configuredAttackProfile.OffensiveDuration);
+            QusapThrownWeaponAttackState configuredAttackState = new(
+                throwId,
+                capturedThrowerEntityId,
+                droppedWeapon.InstanceId,
+                QusapWeaponReleaseType.VoluntarySwapThrow,
+                direction,
+                facing,
+                dropTimestamp,
+                normalizedAttackProfile.OffensiveDuration);
+            bool completed = CompleteInitialization(
                 droppedWeapon,
                 droppedVisualPrefab,
                 origin,
@@ -138,6 +197,15 @@ namespace Qusap
                 formerOwnerEntityId,
                 dropTimestamp,
                 false);
+            if (completed)
+            {
+                attackState = configuredAttackState;
+                attackProfile = normalizedAttackProfile;
+                thrower = capturedThrower;
+                targetLayers = configuredTargetLayers;
+            }
+
+            return completed;
         }
 
         public bool InitializeSettled(
@@ -159,7 +227,7 @@ namespace Qusap
                 return false;
             }
 
-            return CompleteInitialization(
+            bool completed = CompleteInitialization(
                 droppedWeapon,
                 droppedVisualPrefab,
                 position,
@@ -174,6 +242,18 @@ namespace Qusap
                 null,
                 spawnTimestamp,
                 true);
+            if (completed)
+            {
+                attackState = CreateNonOffensiveState(
+                    droppedWeapon,
+                    QusapWeaponReleaseType.InitialSpawn,
+                    QusapWeaponThrowDirection.Forward,
+                    1,
+                    spawnTimestamp);
+                attackState.MarkSettled(spawnTimestamp);
+            }
+
+            return completed;
         }
 
         public bool TryReserve(ulong entityId)
@@ -304,6 +384,8 @@ namespace Qusap
                 return;
             }
 
+            Vector3 previousPosition = transform.position;
+            float previousElapsed = elapsed;
             elapsed = Mathf.Min(elapsed + deltaTime, duration);
             float normalized = elapsed / duration;
             float eased = normalized * normalized * (3f - 2f * normalized);
@@ -313,6 +395,307 @@ namespace Qusap
             transform.SetPositionAndRotation(
                 position,
                 Quaternion.SlerpUnclamped(startRotation, endRotation, eased));
+
+            ProcessOffensiveSweep(
+                previousPosition,
+                position,
+                droppedAt + previousElapsed,
+                droppedAt + elapsed);
+            if (IsSettled)
+            {
+                attackState?.MarkSettled(droppedAt + elapsed);
+            }
+        }
+
+        private void ProcessOffensiveSweep(
+            Vector3 previousPosition,
+            Vector3 currentPosition,
+            double previousTimestamp,
+            double currentTimestamp)
+        {
+            if (resolvingImpact
+                || attackState == null
+                || attackProfile == null
+                || thrower == null
+                || !attackState.TryAdvance(previousTimestamp)
+                || !attackState.IsOffensive)
+            {
+                attackState?.TryAdvance(currentTimestamp);
+                return;
+            }
+
+            double interval = currentTimestamp - previousTimestamp;
+            float offensiveFraction = interval <= 0d
+                ? 1f
+                : Mathf.Clamp01((float)(
+                    (attackState.OffensiveUntil - previousTimestamp) / interval));
+            Vector3 offensiveEnd = Vector3.LerpUnclamped(
+                previousPosition,
+                currentPosition,
+                offensiveFraction);
+            offensiveEnd.z = planeZ;
+            int candidateCount = CollectTargetCandidates(
+                previousPosition,
+                offensiveEnd);
+            TryResolveFirstValidCandidate(
+                candidateCount,
+                previousPosition,
+                offensiveEnd,
+                previousTimestamp,
+                currentTimestamp,
+                offensiveFraction);
+            attackState.TryAdvance(currentTimestamp);
+        }
+
+        private int CollectTargetCandidates(Vector3 start, Vector3 end)
+        {
+            int candidateCount = 0;
+            int overlapCount = Physics.OverlapSphereNonAlloc(
+                start,
+                attackProfile.DetectionRadius,
+                overlapHits,
+                targetLayers,
+                QueryTriggerInteraction.Collide);
+            for (int i = 0; i < overlapCount; i++)
+            {
+                AddTargetCandidate(
+                    overlapHits[i],
+                    0f,
+                    start,
+                    ref candidateCount);
+                overlapHits[i] = null;
+            }
+
+            Vector3 displacement = end - start;
+            float distance = displacement.magnitude;
+            if (distance <= Mathf.Epsilon)
+            {
+                return candidateCount;
+            }
+
+            int hitCount = Physics.SphereCastNonAlloc(
+                start,
+                attackProfile.DetectionRadius,
+                displacement / distance,
+                sweepHits,
+                distance,
+                targetLayers,
+                QueryTriggerInteraction.Collide);
+            for (int i = 0; i < hitCount; i++)
+            {
+                RaycastHit hit = sweepHits[i];
+                AddTargetCandidate(
+                    hit.collider,
+                    Mathf.Clamp(hit.distance, 0f, distance),
+                    hit.point,
+                    ref candidateCount);
+                sweepHits[i] = default;
+            }
+
+            return candidateCount;
+        }
+
+        private void AddTargetCandidate(
+            Collider candidateCollider,
+            float distance,
+            Vector3 impactPoint,
+            ref int candidateCount)
+        {
+            if (candidateCollider == null || !candidateCollider.enabled)
+            {
+                return;
+            }
+
+            QusapHurtbox hurtbox = candidateCollider.GetComponent<QusapHurtbox>();
+            hurtbox ??= candidateCollider.GetComponentInParent<QusapHurtbox>();
+            QusapHitReceiver receiver = hurtbox != null ? hurtbox.Receiver : null;
+            QusapCombatController target = hurtbox != null ? hurtbox.Owner : null;
+            if (receiver == null
+                || target == null
+                || !hurtbox.isActiveAndEnabled
+                || !receiver.isActiveAndEnabled
+                || !target.isActiveAndEnabled
+                || !receiver.AcceptsHits
+                || !target.CombatAllowed)
+            {
+                return;
+            }
+
+            ulong targetEntityId = EntityId.ToULong(target.GetEntityId());
+            if (targetEntityId == 0
+                || targetEntityId == attackState.ThrowerEntityId
+                || receiver.gameObject == thrower.gameObject)
+            {
+                return;
+            }
+
+            RuntimeTargetCandidate candidate = new(
+                receiver,
+                new QusapThrownWeaponTargetCandidate(targetEntityId, distance),
+                impactPoint);
+            for (int i = 0; i < candidateCount; i++)
+            {
+                if (targetCandidates[i].Receiver != receiver)
+                {
+                    continue;
+                }
+
+                if (QusapThrownWeaponTargetCandidate.IsPreferred(
+                    candidate.LogicalCandidate,
+                    targetCandidates[i].LogicalCandidate))
+                {
+                    targetCandidates[i] = candidate;
+                }
+
+                return;
+            }
+
+            if (candidateCount < targetCandidates.Length)
+            {
+                targetCandidates[candidateCount++] = candidate;
+            }
+        }
+
+        private void TryResolveFirstValidCandidate(
+            int candidateCount,
+            Vector3 sweepStart,
+            Vector3 sweepEnd,
+            double previousTimestamp,
+            double currentTimestamp,
+            float offensiveFraction)
+        {
+            for (int i = 0; i < candidateCount; i++)
+            {
+                attemptedCandidates[i] = false;
+            }
+
+            for (int attempt = 0; attempt < candidateCount; attempt++)
+            {
+                int selectedIndex = -1;
+                for (int i = 0; i < candidateCount; i++)
+                {
+                    if (attemptedCandidates[i]
+                        || (selectedIndex >= 0
+                            && !QusapThrownWeaponTargetCandidate.IsPreferred(
+                                targetCandidates[i].LogicalCandidate,
+                                targetCandidates[selectedIndex].LogicalCandidate)))
+                    {
+                        continue;
+                    }
+
+                    selectedIndex = i;
+                }
+
+                if (selectedIndex < 0)
+                {
+                    break;
+                }
+
+                attemptedCandidates[selectedIndex] = true;
+                RuntimeTargetCandidate selected = targetCandidates[selectedIndex];
+                float sweepDistance = Vector3.Distance(sweepStart, sweepEnd);
+                float trajectoryFraction = sweepDistance <= Mathf.Epsilon
+                    ? 0f
+                    : Mathf.Clamp01(
+                        selected.LogicalCandidate.DistanceAlongTrajectory
+                        / sweepDistance);
+                double impactTimestamp = previousTimestamp
+                    + ((currentTimestamp - previousTimestamp)
+                        * offensiveFraction
+                        * trajectoryFraction);
+                if (TryDeliverImpact(selected, impactTimestamp))
+                {
+                    break;
+                }
+            }
+
+            for (int i = 0; i < candidateCount; i++)
+            {
+                targetCandidates[i] = default;
+                attemptedCandidates[i] = false;
+            }
+        }
+
+        private bool TryDeliverImpact(
+            RuntimeTargetCandidate candidate,
+            double impactTimestamp)
+        {
+            if (!attackState.IsOffensive
+                || candidate.Receiver == null
+                || !candidate.Receiver.AcceptsHits
+                || EntityId.ToULong(thrower.GetEntityId())
+                    != attackState.ThrowerEntityId)
+            {
+                return false;
+            }
+
+            bool upward = attackState.Direction == QusapWeaponThrowDirection.Up;
+            float horizontalKnockback = upward
+                ? attackProfile.VerticalKnockback
+                : attackProfile.HorizontalKnockback;
+            float verticalKnockback = upward
+                ? attackProfile.HorizontalKnockback
+                : attackProfile.VerticalKnockback;
+            QusapHitInfo hitInfo = new(
+                thrower,
+                QusapAttackType.StrongKick,
+                QusapAttackVariant.None,
+                attackProfile.Damage,
+                attackState.CapturedFacingDirection,
+                horizontalKnockback,
+                verticalKnockback,
+                attackProfile.HitstunDuration,
+                candidate.ImpactPoint);
+
+            resolvingImpact = true;
+            bool accepted = candidate.Receiver.TryReceiveHit(hitInfo);
+            resolvingImpact = false;
+            if (!accepted
+                || !attackState.TryConsumeImpact(
+                    candidate.LogicalCandidate.TargetEntityId,
+                    impactTimestamp))
+            {
+                return false;
+            }
+
+            confirmedImpactCount = 1;
+            confirmedTarget = candidate.Receiver;
+            return true;
+        }
+
+        private static QusapThrownWeaponAttackState CreateNonOffensiveState(
+            QusapWeaponInstance configuredWeapon,
+            QusapWeaponReleaseType configuredReleaseType,
+            QusapWeaponThrowDirection configuredDirection,
+            int configuredFacing,
+            double timestamp)
+        {
+            return new QusapThrownWeaponAttackState(
+                0,
+                0,
+                configuredWeapon.InstanceId,
+                configuredReleaseType,
+                configuredDirection,
+                configuredFacing,
+                timestamp,
+                0d);
+        }
+
+        private readonly struct RuntimeTargetCandidate
+        {
+            public RuntimeTargetCandidate(
+                QusapHitReceiver receiver,
+                QusapThrownWeaponTargetCandidate logicalCandidate,
+                Vector3 impactPoint)
+            {
+                Receiver = receiver;
+                LogicalCandidate = logicalCandidate;
+                ImpactPoint = impactPoint;
+            }
+
+            public QusapHitReceiver Receiver { get; }
+            public QusapThrownWeaponTargetCandidate LogicalCandidate { get; }
+            public Vector3 ImpactPoint { get; }
         }
 
         private static bool IsFinite(Vector3 value)

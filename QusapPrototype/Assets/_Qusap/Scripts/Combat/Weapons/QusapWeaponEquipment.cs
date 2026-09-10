@@ -130,6 +130,30 @@ namespace Qusap
             return result;
         }
 
+        public QusapWeaponOperationResult TryVoluntarySwap(
+            QusapWeaponInstance expectedEquippedWeapon,
+            QusapWeaponInstance replacementWeapon,
+            out QusapWeaponSwapTransition swapTransition)
+        {
+            swapTransition = default;
+            if (!EnsureInitialized())
+            {
+                return QusapWeaponOperationResult.InvalidOwner;
+            }
+
+            QusapWeaponOperationResult result = state.TryVoluntarySwap(
+                expectedEquippedWeapon,
+                replacementWeapon,
+                out swapTransition);
+            if (result == QusapWeaponOperationResult.Success)
+            {
+                WeaponTransitioned?.Invoke(swapTransition.ReleaseTransition);
+                WeaponTransitioned?.Invoke(swapTransition.EquipTransition);
+            }
+
+            return result;
+        }
+
         public bool TryDisarm(QusapCombatController source)
         {
             if (!isActiveAndEnabled || source == null)

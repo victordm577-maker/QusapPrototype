@@ -87,6 +87,16 @@
                     "priority": 0
                 },
                 {
+                    "name": "WeaponSwapThrow",
+                    "type": "Button",
+                    "id": "789caa89-8816-4d1e-a676-e217932b8ae0",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "Press(behavior=0)",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
                     "name": "Parry",
                     "type": "Button",
                     "id": "ec90eb1c-fc4f-4ddb-92cb-8261cf6b43cf",
@@ -238,6 +248,28 @@
                     "processors": "",
                     "groups": "Player2",
                     "action": "WeaponStrong",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "6bf22366-9916-424c-845f-a1730528ce01",
+                    "path": "<Keyboard>/e",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Player1",
+                    "action": "WeaponSwapThrow",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "d5e8cf55-d89c-4966-823b-225aeed510c4",
+                    "path": "<Gamepad>/rightTrigger",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Player2",
+                    "action": "WeaponSwapThrow",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

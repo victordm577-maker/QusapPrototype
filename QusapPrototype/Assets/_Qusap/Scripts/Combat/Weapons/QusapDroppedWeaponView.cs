@@ -18,12 +18,17 @@ namespace Qusap
         private Quaternion startRotation;
         private Quaternion endRotation;
         private float duration;
+        private float arcHeight;
         private float elapsed;
         private float planeZ;
         private bool initialized;
         private bool claimed;
         private ulong? previousOwnerEntityId;
         private double droppedAt;
+        private ulong? reservedByEntityId;
+        private QusapWeaponReleaseType releaseType;
+        private QusapWeaponThrowDirection throwDirection;
+        private int capturedFacingDirection;
 
         public QusapWeaponInstance Weapon => weapon;
         public ulong InstanceId => weapon?.InstanceId ?? 0;
@@ -32,9 +37,14 @@ namespace Qusap
         public bool IsInitialized => initialized;
         public bool IsSettled => initialized && elapsed >= duration;
         public bool IsClaimed => claimed;
+        public bool IsReserved => reservedByEntityId.HasValue;
+        public ulong? ReservedByEntityId => reservedByEntityId;
         public ulong? PreviousOwnerEntityId => previousOwnerEntityId;
         public double DroppedAt => droppedAt;
         public float PlaneZ => planeZ;
+        public QusapWeaponReleaseType ReleaseType => releaseType;
+        public QusapWeaponThrowDirection ThrowDirection => throwDirection;
+        public int CapturedFacingDirection => capturedFacingDirection;
 
         private void Update()
         {
@@ -55,7 +65,150 @@ namespace Qusap
             ulong? formerOwnerEntityId = null,
             double dropTimestamp = 0d)
         {
-            if (initialized
+            if (!ValidateInitialization(
+                    droppedWeapon,
+                    droppedVisualPrefab,
+                    origin,
+                    animationDuration,
+                    outwardDistance,
+                    fallDistance,
+                    formerOwnerEntityId,
+                    dropTimestamp))
+            {
+                return false;
+            }
+
+            int direction = outwardDirection < 0 ? -1 : 1;
+            return CompleteInitialization(
+                droppedWeapon,
+                droppedVisualPrefab,
+                origin,
+                origin + new Vector3(direction * outwardDistance, -fallDistance, 0f),
+                animationDuration,
+                0.18f,
+                Quaternion.identity,
+                Quaternion.Euler(0f, 0f, -DefaultRestingTilt * direction),
+                QusapWeaponReleaseType.Disarmed,
+                QusapWeaponThrowDirection.Forward,
+                direction,
+                formerOwnerEntityId,
+                dropTimestamp,
+                false);
+        }
+
+        public bool InitializeVoluntaryThrow(
+            QusapWeaponInstance droppedWeapon,
+            GameObject droppedVisualPrefab,
+            Vector3 origin,
+            QusapWeaponThrowDirection direction,
+            int capturedFacing,
+            QusapWeaponThrowTrajectoryProfile profile,
+            ulong formerOwnerEntityId,
+            double dropTimestamp)
+        {
+            if (!ValidateInitialization(
+                    droppedWeapon,
+                    droppedVisualPrefab,
+                    origin,
+                    profile.Duration,
+                    profile.HorizontalDistance,
+                    DefaultFallDistance,
+                    formerOwnerEntityId,
+                    dropTimestamp))
+            {
+                return false;
+            }
+
+            int facing = capturedFacing < 0 ? -1 : 1;
+            return CompleteInitialization(
+                droppedWeapon,
+                droppedVisualPrefab,
+                origin,
+                origin + new Vector3(
+                    facing * profile.HorizontalDistance,
+                    -DefaultFallDistance,
+                    0f),
+                profile.Duration,
+                profile.ArcHeight,
+                Quaternion.identity,
+                Quaternion.Euler(0f, 0f, -540f * facing),
+                QusapWeaponReleaseType.VoluntarySwapThrow,
+                direction,
+                facing,
+                formerOwnerEntityId,
+                dropTimestamp,
+                false);
+        }
+
+        public bool InitializeSettled(
+            QusapWeaponInstance droppedWeapon,
+            GameObject droppedVisualPrefab,
+            Vector3 position,
+            double spawnTimestamp)
+        {
+            if (!ValidateInitialization(
+                    droppedWeapon,
+                    droppedVisualPrefab,
+                    position,
+                    DefaultDuration,
+                    0f,
+                    0f,
+                    null,
+                    spawnTimestamp))
+            {
+                return false;
+            }
+
+            return CompleteInitialization(
+                droppedWeapon,
+                droppedVisualPrefab,
+                position,
+                position,
+                DefaultDuration,
+                0f,
+                Quaternion.Euler(0f, 0f, DefaultRestingTilt),
+                Quaternion.Euler(0f, 0f, DefaultRestingTilt),
+                QusapWeaponReleaseType.InitialSpawn,
+                QusapWeaponThrowDirection.Forward,
+                1,
+                null,
+                spawnTimestamp,
+                true);
+        }
+
+        public bool TryReserve(ulong entityId)
+        {
+            if (!initialized || claimed || entityId == 0 || reservedByEntityId.HasValue)
+            {
+                return false;
+            }
+
+            reservedByEntityId = entityId;
+            return true;
+        }
+
+        public bool ReleaseReservation(ulong entityId)
+        {
+            if (entityId == 0 || reservedByEntityId != entityId || claimed)
+            {
+                return false;
+            }
+
+            reservedByEntityId = null;
+            return true;
+        }
+
+        private bool ValidateInitialization(
+            QusapWeaponInstance droppedWeapon,
+            GameObject droppedVisualPrefab,
+            Vector3 origin,
+            float animationDuration,
+            float outwardDistance,
+            float fallDistance,
+            ulong? formerOwnerEntityId,
+            double dropTimestamp)
+        {
+            return !(initialized
                 || droppedWeapon == null
                 || !droppedWeapon.IsFree
                 || droppedVisualPrefab == null
@@ -68,27 +221,42 @@ namespace Qusap
                 || fallDistance < 0f
                 || (formerOwnerEntityId.HasValue
                     && formerOwnerEntityId.Value == 0)
-                || !IsFinite(dropTimestamp))
-            {
-                return false;
-            }
+                || !IsFinite(dropTimestamp));
+        }
 
-            int direction = outwardDirection < 0 ? -1 : 1;
+        private bool CompleteInitialization(
+            QusapWeaponInstance droppedWeapon,
+            GameObject droppedVisualPrefab,
+            Vector3 origin,
+            Vector3 destination,
+            float animationDuration,
+            float configuredArcHeight,
+            Quaternion originRotation,
+            Quaternion destinationRotation,
+            QusapWeaponReleaseType configuredReleaseType,
+            QusapWeaponThrowDirection configuredThrowDirection,
+            int configuredFacingDirection,
+            ulong? formerOwnerEntityId,
+            double dropTimestamp,
+            bool settled)
+        {
             weapon = droppedWeapon;
             visualPrefab = droppedVisualPrefab;
             duration = animationDuration;
+            arcHeight = configuredArcHeight;
             planeZ = origin.z;
             startPosition = origin;
-            endPosition = origin + new Vector3(
-                direction * outwardDistance,
-                -fallDistance,
-                0f);
-            startRotation = Quaternion.identity;
-            endRotation = Quaternion.Euler(0f, 0f, -DefaultRestingTilt * direction);
-            elapsed = 0f;
+            endPosition = destination;
+            startRotation = originRotation;
+            endRotation = destinationRotation;
+            elapsed = settled ? duration : 0f;
             claimed = false;
+            reservedByEntityId = null;
             previousOwnerEntityId = formerOwnerEntityId;
             droppedAt = dropTimestamp;
+            releaseType = configuredReleaseType;
+            throwDirection = configuredThrowDirection;
+            capturedFacingDirection = configuredFacingDirection < 0 ? -1 : 1;
             transform.SetPositionAndRotation(startPosition, startRotation);
             transform.localScale = Vector3.one;
 
@@ -108,7 +276,7 @@ namespace Qusap
                 InstanceId,
                 weapon != null && weapon.IsFree,
                 IsSettled,
-                claimed,
+                claimed || reservedByEntityId.HasValue,
                 previousOwnerEntityId,
                 droppedAt,
                 transform.position);
@@ -122,6 +290,7 @@ namespace Qusap
             }
 
             claimed = true;
+            reservedByEntityId = null;
             gameObject.SetActive(false);
         }
 
@@ -139,7 +308,7 @@ namespace Qusap
             float normalized = elapsed / duration;
             float eased = normalized * normalized * (3f - 2f * normalized);
             Vector3 position = Vector3.LerpUnclamped(startPosition, endPosition, eased);
-            position.y += Mathf.Sin(normalized * Mathf.PI) * 0.18f;
+            position.y += Mathf.Sin(normalized * Mathf.PI) * arcHeight;
             position.z = planeZ;
             transform.SetPositionAndRotation(
                 position,

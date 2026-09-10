@@ -289,6 +289,14 @@ MonoBehaviour:
   droppedDuration: 0.4
   pickupRadius: 0.85
   previousOwnerPickupLockout: 1
+  spawnInitialWhiteWeapon: 1
+  initialWhiteWeaponPosition: {x: 0, y: 0.35, z: 0}
+  forwardThrowDistance: 4.5
+  forwardThrowArcHeight: 1.2
+  forwardThrowDuration: 0.65
+  upThrowHorizontalDistance: 0.8
+  upThrowArcHeight: 4
+  upThrowDuration: 0.7
 --- !u!4 &395847090
 Transform:
   m_ObjectHideFlags: 0

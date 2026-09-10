@@ -186,7 +186,8 @@ namespace Qusap
             }
 
             if ((transition.Type == QusapWeaponTransitionType.Dropped
-                    || transition.Type == QusapWeaponTransitionType.Disarmed)
+                    || transition.Type == QusapWeaponTransitionType.Disarmed
+                    || transition.Type == QusapWeaponTransitionType.VoluntarySwapThrow)
                 && displayedWeapon == transition.Weapon)
             {
                 ClearVisual();

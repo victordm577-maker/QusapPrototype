@@ -22,6 +22,15 @@ namespace Qusap
             QusapWeaponPickupResolver.DefaultPickupRadius;
         [SerializeField] private float previousOwnerPickupLockout =
             (float)QusapWeaponPickupResolver.DefaultPreviousOwnerLockout;
+        [SerializeField] private bool spawnInitialWhiteWeapon;
+        [SerializeField] private Vector3 initialWhiteWeaponPosition =
+            new(0f, 0.35f, 0f);
+        [SerializeField] private float forwardThrowDistance = 4.5f;
+        [SerializeField] private float forwardThrowArcHeight = 1.2f;
+        [SerializeField] private float forwardThrowDuration = 0.65f;
+        [SerializeField] private float upThrowHorizontalDistance = 0.8f;
+        [SerializeField] private float upThrowArcHeight = 4.0f;
+        [SerializeField] private float upThrowDuration = 0.70f;
 
         private readonly QusapWeaponIdGenerator idGenerator = new();
         private readonly List<QusapDroppedWeaponView> droppedWeapons = new();
@@ -31,6 +40,8 @@ namespace Qusap
         private bool subscribed;
         private bool initialized;
         private bool destroying;
+        private QusapInputReader playerOneInput;
+        private QusapInputReader playerTwoInput;
 
         public bool IsInitialized => initialized;
         public QusapWeaponVisualCatalog Catalog => catalog;
@@ -40,6 +51,7 @@ namespace Qusap
         public QusapEquippedWeaponPresenter PlayerTwoPresenter => playerTwoPresenter;
         public QusapWeaponInstance PlayerOneWeapon { get; private set; }
         public QusapWeaponInstance PlayerTwoWeapon { get; private set; }
+        public QusapWeaponInstance InitialWhiteWeapon { get; private set; }
         public IReadOnlyList<QusapDroppedWeaponView> DroppedWeapons => droppedWeapons;
         public int DroppedWeaponCount => droppedWeapons.Count;
         public float PickupRadius => pickupResolver?.PickupRadius
@@ -53,6 +65,8 @@ namespace Qusap
         {
             if (initialized && Time.timeScale > 0f)
             {
+                ProcessSwapInput(playerOneEquipment, playerOneInput);
+                ProcessSwapInput(playerTwoEquipment, playerTwoInput);
                 ProcessPickups(Time.timeAsDouble);
             }
         }
@@ -89,6 +103,9 @@ namespace Qusap
             pickupCandidates.Clear();
             pickupResolver?.ResetTime();
             pickupResolver = null;
+            playerOneInput = null;
+            playerTwoInput = null;
+            InitialWhiteWeapon = null;
             initialized = false;
         }
 
@@ -99,6 +116,7 @@ namespace Qusap
             previousOwnerPickupLockout = (float)
                 QusapWeaponPickupResolver.NormalizePreviousOwnerLockout(
                     previousOwnerPickupLockout);
+            NormalizeThrowProfiles();
         }
 
         public void Configure(
@@ -139,6 +157,17 @@ namespace Qusap
                 previousOwnerPickupLockout);
         }
 
+        public void ConfigureInitialWhiteWeapon(bool enabled, Vector3 position)
+        {
+            if (initialized || !IsFinite(position))
+            {
+                return;
+            }
+
+            spawnInitialWhiteWeapon = enabled;
+            initialWhiteWeaponPosition = position;
+        }
+
         public bool TryInitialize()
         {
             if (initialized)
@@ -154,6 +183,7 @@ namespace Qusap
             pickupResolver = new QusapWeaponPickupResolver(
                 pickupRadius,
                 previousOwnerPickupLockout);
+            NormalizeThrowProfiles();
 
             if (!ValidateConfiguration()
                 || !playerOnePresenter.TryInitialize()
@@ -193,7 +223,144 @@ namespace Qusap
 
             PlayerOneWeapon = playerOneWeapon;
             PlayerTwoWeapon = playerTwoWeapon;
+            playerOneInput = playerOneEquipment.GetComponent<QusapInputReader>();
+            playerTwoInput = playerTwoEquipment.GetComponent<QusapInputReader>();
+            if (spawnInitialWhiteWeapon
+                && (!catalog.TryGetDefinition(
+                        QusapWeaponVisualCatalog.WhiteDefinitionId,
+                        out QusapWeaponDefinition whiteDefinition)
+                    || !TryCreateInitialDroppedWeapon(
+                        new QusapWeaponInstance(idGenerator.Next(), whiteDefinition),
+                        initialWhiteWeaponPosition,
+                        Time.timeAsDouble)))
+            {
+                playerTwoEquipment.TryDrop(out _, out _);
+                playerOneEquipment.TryDrop(out _, out _);
+                Unsubscribe();
+                return false;
+            }
+
             initialized = true;
+            return true;
+        }
+
+        public bool TryProcessVoluntarySwap(
+            QusapWeaponEquipment equipment,
+            QusapWeaponSwapThrowPress press,
+            double currentTimestamp)
+        {
+            if (!initialized
+                || !isActiveAndEnabled
+                || Time.timeScale <= 0f
+                || press.PressId == 0
+                || !IsFinite(currentTimestamp)
+                || !IsRegisteredAndActive(equipment)
+                || !equipment.HasWeapon
+                || IsSwapThrowInProgress(equipment.OwnerEntityId)
+                || !IsInputEnabled(equipment)
+                || pickupResolver == null)
+            {
+                return false;
+            }
+
+            QusapDroppedWeaponView selected = null;
+            QusapWeaponPickupCandidate selectedCandidate = default;
+            bool hasSelected = false;
+            QusapWeaponPickupPlayerSnapshot player = CreatePlayerSnapshot(equipment);
+            for (int i = 0; i < droppedWeapons.Count; i++)
+            {
+                QusapDroppedWeaponView dropped = droppedWeapons[i];
+                if (dropped == null
+                    || !pickupResolver.TryCreateSwapCandidate(
+                        player,
+                        dropped.CreatePickupSnapshot(),
+                        currentTimestamp,
+                        out QusapWeaponPickupCandidate candidate)
+                    || (hasSelected
+                        && !QusapWeaponPickupResolver.IsPreferred(
+                            candidate,
+                            selectedCandidate)))
+                {
+                    continue;
+                }
+
+                selected = dropped;
+                selectedCandidate = candidate;
+                hasSelected = true;
+            }
+
+            if (!hasSelected
+                || selected == null
+                || !selected.TryReserve(equipment.OwnerEntityId))
+            {
+                return false;
+            }
+
+            QusapWeaponInstance original = equipment.EquippedWeapon;
+            QusapWeaponInstance replacement = selected.Weapon;
+            QusapEquippedWeaponPresenter presenter = GetPresenter(equipment);
+            if (original == null
+                || replacement == null
+                || !replacement.IsFree
+                || representedDroppedIds.Contains(original.InstanceId)
+                || presenter == null
+                || !catalog.TryGetEntry(
+                    original.Definition.Id,
+                    out QusapWeaponVisualEntry releasedEntry))
+            {
+                selected.ReleaseReservation(equipment.OwnerEntityId);
+                return false;
+            }
+
+            Vector3 origin = presenter.WeaponSocket != null
+                ? presenter.WeaponSocket.position
+                : presenter.transform.position;
+            origin.z = presenter.transform.position.z;
+            if (!IsFinite(origin))
+            {
+                selected.ReleaseReservation(equipment.OwnerEntityId);
+                return false;
+            }
+
+            QusapWeaponOperationResult result = equipment.TryVoluntarySwap(
+                original,
+                replacement,
+                out QusapWeaponSwapTransition swap);
+            if (result != QusapWeaponOperationResult.Success)
+            {
+                selected.ReleaseReservation(equipment.OwnerEntityId);
+                return false;
+            }
+
+            selected.MarkClaimed();
+            droppedWeapons.Remove(selected);
+            representedDroppedIds.Remove(replacement.InstanceId);
+            DestroyObject(selected.gameObject);
+
+            QusapDroppedWeaponView thrown = CreateDroppedObject(swap.ReleasedWeapon);
+            if (thrown == null
+                || !thrown.InitializeVoluntaryThrow(
+                    swap.ReleasedWeapon,
+                    releasedEntry.VisualPrefab,
+                    origin,
+                    press.Direction,
+                    press.FacingDirection,
+                    GetThrowProfile(press.Direction),
+                    equipment.OwnerEntityId,
+                    currentTimestamp))
+            {
+                if (thrown != null)
+                {
+                    DestroyObject(thrown.gameObject);
+                }
+
+                Debug.LogError(
+                    $"Committed weapon swap could not represent released instance {swap.ReleasedWeapon.InstanceId}.",
+                    this);
+                return false;
+            }
+
+            RegisterDropped(thrown);
             return true;
         }
 
@@ -287,6 +454,161 @@ namespace Qusap
             return true;
         }
 
+        private void ProcessSwapInput(
+            QusapWeaponEquipment equipment,
+            QusapInputReader input)
+        {
+            if (input != null
+                && input.TryConsumeWeaponSwapThrow(out QusapWeaponSwapThrowPress press))
+            {
+                TryProcessVoluntarySwap(equipment, press, Time.timeAsDouble);
+            }
+        }
+
+        private bool TryCreateInitialDroppedWeapon(
+            QusapWeaponInstance weapon,
+            Vector3 position,
+            double timestamp)
+        {
+            if (weapon == null
+                || !weapon.IsFree
+                || !IsFinite(position)
+                || !catalog.TryGetEntry(
+                    weapon.Definition.Id,
+                    out QusapWeaponVisualEntry entry))
+            {
+                return false;
+            }
+
+            QusapDroppedWeaponView dropped = CreateDroppedObject(weapon);
+            if (dropped == null
+                || !dropped.InitializeSettled(
+                    weapon,
+                    entry.VisualPrefab,
+                    position,
+                    timestamp))
+            {
+                if (dropped != null)
+                {
+                    DestroyObject(dropped.gameObject);
+                }
+
+                return false;
+            }
+
+            RegisterDropped(dropped);
+            InitialWhiteWeapon = weapon;
+            return true;
+        }
+
+        private QusapDroppedWeaponView CreateDroppedObject(QusapWeaponInstance weapon)
+        {
+            if (weapon == null
+                || representedDroppedIds.Contains(weapon.InstanceId))
+            {
+                return null;
+            }
+
+            GameObject droppedObject = new($"DroppedWeapon_{weapon.InstanceId}");
+            droppedObject.transform.SetParent(transform, true);
+            return droppedObject.AddComponent<QusapDroppedWeaponView>();
+        }
+
+        private void RegisterDropped(QusapDroppedWeaponView dropped)
+        {
+            representedDroppedIds.Add(dropped.InstanceId);
+            droppedWeapons.Add(dropped);
+            int requiredCandidateCapacity = droppedWeapons.Count * 2;
+            if (pickupCandidates.Capacity < requiredCandidateCapacity)
+            {
+                pickupCandidates.Capacity = requiredCandidateCapacity;
+            }
+        }
+
+        private bool IsSwapThrowInProgress(ulong ownerEntityId)
+        {
+            for (int i = 0; i < droppedWeapons.Count; i++)
+            {
+                QusapDroppedWeaponView dropped = droppedWeapons[i];
+                if (dropped != null
+                    && dropped.ReleaseType == QusapWeaponReleaseType.VoluntarySwapThrow
+                    && dropped.PreviousOwnerEntityId == ownerEntityId
+                    && !dropped.IsSettled)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsInputEnabled(QusapWeaponEquipment equipment)
+        {
+            QusapInputReader input = equipment == playerOneEquipment
+                ? playerOneInput
+                : equipment == playerTwoEquipment
+                    ? playerTwoInput
+                    : null;
+            return input != null && input.isActiveAndEnabled;
+        }
+
+        private QusapEquippedWeaponPresenter GetPresenter(
+            QusapWeaponEquipment equipment)
+        {
+            return equipment == playerOneEquipment
+                ? playerOnePresenter
+                : equipment == playerTwoEquipment
+                    ? playerTwoPresenter
+                    : null;
+        }
+
+        private QusapWeaponThrowTrajectoryProfile GetThrowProfile(
+            QusapWeaponThrowDirection direction)
+        {
+            return direction == QusapWeaponThrowDirection.Up
+                ? new QusapWeaponThrowTrajectoryProfile(
+                    upThrowHorizontalDistance,
+                    upThrowArcHeight,
+                    upThrowDuration,
+                    0.8f,
+                    4.0f,
+                    0.70f)
+                : new QusapWeaponThrowTrajectoryProfile(
+                    forwardThrowDistance,
+                    forwardThrowArcHeight,
+                    forwardThrowDuration,
+                    4.5f,
+                    1.2f,
+                    0.65f);
+        }
+
+        private void NormalizeThrowProfiles()
+        {
+            QusapWeaponThrowTrajectoryProfile forward =
+                new QusapWeaponThrowTrajectoryProfile(
+                    forwardThrowDistance,
+                    forwardThrowArcHeight,
+                    forwardThrowDuration,
+                    4.5f,
+                    1.2f,
+                    0.65f);
+            forwardThrowDistance = forward.HorizontalDistance;
+            forwardThrowArcHeight = forward.ArcHeight;
+            forwardThrowDuration = forward.Duration;
+
+            QusapWeaponThrowTrajectoryProfile up =
+                new QusapWeaponThrowTrajectoryProfile(
+                    upThrowHorizontalDistance,
+                    upThrowArcHeight,
+                    upThrowDuration,
+                    0.8f,
+                    4.0f,
+                    0.70f);
+            upThrowHorizontalDistance = up.HorizontalDistance;
+            upThrowArcHeight = up.ArcHeight;
+            upThrowDuration = up.Duration;
+        }
+
         private bool ValidateConfiguration()
         {
             return catalog != null
@@ -366,11 +688,9 @@ namespace Qusap
                 0f);
             origin.z = ownerPosition.z;
 
-            GameObject droppedObject = new($"DroppedWeapon_{transition.Weapon.InstanceId}");
-            droppedObject.transform.SetParent(transform, true);
-            QusapDroppedWeaponView droppedView =
-                droppedObject.AddComponent<QusapDroppedWeaponView>();
-            if (!droppedView.Initialize(
+            QusapDroppedWeaponView droppedView = CreateDroppedObject(transition.Weapon);
+            if (droppedView == null
+                || !droppedView.Initialize(
                     transition.Weapon,
                     entry.VisualPrefab,
                     origin,
@@ -381,17 +701,15 @@ namespace Qusap
                     transition.PreviousOwnerEntityId,
                     Time.timeAsDouble))
             {
-                DestroyObject(droppedObject);
+                if (droppedView != null)
+                {
+                    DestroyObject(droppedView.gameObject);
+                }
+
                 return;
             }
 
-            representedDroppedIds.Add(transition.Weapon.InstanceId);
-            droppedWeapons.Add(droppedView);
-            int requiredCandidateCapacity = droppedWeapons.Count * 2;
-            if (pickupCandidates.Capacity < requiredCandidateCapacity)
-            {
-                pickupCandidates.Capacity = requiredCandidateCapacity;
-            }
+            RegisterDropped(droppedView);
         }
 
         private void AddCandidatesForPlayer(
@@ -459,6 +777,18 @@ namespace Qusap
             {
                 DestroyImmediate(target);
             }
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return float.IsFinite(value.x)
+                && float.IsFinite(value.y)
+                && float.IsFinite(value.z);
         }
 
         private readonly struct RuntimePickupCandidate

@@ -104,11 +104,72 @@ namespace Qusap
             double currentTimestamp,
             out QusapWeaponPickupCandidate candidate)
         {
+            return TryCreateCandidateForWeaponState(
+                player,
+                dropped,
+                currentTimestamp,
+                false,
+                out candidate);
+        }
+
+        public bool TryCreateSwapCandidate(
+            QusapWeaponPickupPlayerSnapshot player,
+            QusapDroppedWeaponSnapshot dropped,
+            double currentTimestamp,
+            out QusapWeaponPickupCandidate candidate)
+        {
+            return TryCreateCandidateForWeaponState(
+                player,
+                dropped,
+                currentTimestamp,
+                true,
+                out candidate);
+        }
+
+        public bool TrySelectBestSwap(
+            QusapWeaponPickupPlayerSnapshot player,
+            IReadOnlyList<QusapDroppedWeaponSnapshot> droppedWeapons,
+            double currentTimestamp,
+            out QusapWeaponPickupCandidate selected)
+        {
+            selected = default;
+            if (droppedWeapons == null || !TryAcceptTimestamp(currentTimestamp))
+            {
+                return false;
+            }
+
+            bool hasSelected = false;
+            for (int i = 0; i < droppedWeapons.Count; i++)
+            {
+                if (!TryCreateSwapCandidate(
+                        player,
+                        droppedWeapons[i],
+                        currentTimestamp,
+                        out QusapWeaponPickupCandidate candidate)
+                    || (hasSelected && !IsPreferred(candidate, selected)))
+                {
+                    continue;
+                }
+
+                selected = candidate;
+                hasSelected = true;
+            }
+
+            return hasSelected;
+        }
+
+        private bool TryCreateCandidateForWeaponState(
+            QusapWeaponPickupPlayerSnapshot player,
+            QusapDroppedWeaponSnapshot dropped,
+            double currentTimestamp,
+            bool requiredHasWeapon,
+            out QusapWeaponPickupCandidate candidate)
+        {
             candidate = default;
             if (!TryAcceptTimestamp(currentTimestamp)
                 || player.EntityId == 0
                 || !player.IsActiveAndRegistered
-                || player.HasWeapon
+                || player.HasWeapon != requiredHasWeapon
                 || !IsFinite(player.Position)
                 || dropped.InstanceId == 0
                 || !dropped.IsFree

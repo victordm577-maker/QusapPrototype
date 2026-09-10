@@ -153,6 +153,84 @@ namespace Qusap
             return QusapWeaponOperationResult.Success;
         }
 
+        public QusapWeaponOperationResult TryVoluntarySwap(
+            QusapWeaponInstance expectedEquippedWeapon,
+            QusapWeaponInstance replacementWeapon,
+            out QusapWeaponSwapTransition swapTransition)
+        {
+            swapTransition = default;
+            if (!HasWeapon)
+            {
+                return QusapWeaponOperationResult.SlotEmpty;
+            }
+
+            QusapWeaponOperationResult consistency = GetOccupiedSlotConsistency();
+            if (consistency != QusapWeaponOperationResult.Success)
+            {
+                return consistency;
+            }
+
+            if (expectedEquippedWeapon == null
+                || replacementWeapon == null
+                || replacementWeapon.InstanceId == 0
+                || ReferenceEquals(expectedEquippedWeapon, replacementWeapon))
+            {
+                return QusapWeaponOperationResult.InvalidWeapon;
+            }
+
+            if (!ReferenceEquals(EquippedWeapon, expectedEquippedWeapon))
+            {
+                return QusapWeaponOperationResult.InconsistentState;
+            }
+
+            if (replacementWeapon.OwnerEntityId.HasValue)
+            {
+                return QusapWeaponOperationResult.WeaponAlreadyOwned;
+            }
+
+            ulong releaseRevision = GetNextRevision();
+            ulong equipRevision = checked(releaseRevision + 1);
+            if (!expectedEquippedWeapon.TryReleaseOwner(OwnerEntityId))
+            {
+                return QusapWeaponOperationResult.InconsistentState;
+            }
+
+            if (!replacementWeapon.TryAssignOwner(OwnerEntityId))
+            {
+                if (!expectedEquippedWeapon.TryAssignOwner(OwnerEntityId))
+                {
+                    throw new InvalidOperationException(
+                        "Weapon swap rollback could not restore the original owner.");
+                }
+
+                return QusapWeaponOperationResult.InconsistentState;
+            }
+
+            EquippedWeapon = replacementWeapon;
+            Revision = equipRevision;
+            QusapWeaponTransition releaseTransition = new(
+                QusapWeaponTransitionType.VoluntarySwapThrow,
+                expectedEquippedWeapon,
+                OwnerEntityId,
+                null,
+                OwnerEntityId,
+                releaseRevision);
+            QusapWeaponTransition equipTransition = new(
+                QusapWeaponTransitionType.Equipped,
+                replacementWeapon,
+                null,
+                OwnerEntityId,
+                OwnerEntityId,
+                equipRevision);
+            LastTransition = equipTransition;
+            swapTransition = new QusapWeaponSwapTransition(
+                expectedEquippedWeapon,
+                replacementWeapon,
+                releaseTransition,
+                equipTransition);
+            return QusapWeaponOperationResult.Success;
+        }
+
         private bool IsConsistent()
         {
             return EquippedWeapon == null

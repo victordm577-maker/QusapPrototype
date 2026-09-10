@@ -42,6 +42,12 @@ namespace Qusap
         [SerializeField] private QusapAirAttackData comboWeaponLightAir =
             QusapAirAttackData.CreateComboWeaponLightAir();
 
+        [Header("Equipped sword attacks")]
+        [SerializeField] private QusapWeaponAttackData weaponLightAttack =
+            QusapWeaponAttackData.CreateLight();
+        [SerializeField] private QusapWeaponAttackData weaponStrongAttack =
+            QusapWeaponAttackData.CreateStrong();
+
         [Header("Combo recognition")]
         [SerializeField] private bool comboRecognitionEnabled = true;
         [SerializeField] private bool logRecognizedCombos = true;
@@ -69,8 +75,11 @@ namespace Qusap
         private QusapDashMotor dashMotor;
         private QusapGroundSensor groundSensor;
         private QusapHitstunController hitstunController;
+        private QusapWeaponEquipment weaponEquipment;
+        private readonly QusapWeaponAttackInputBuffer weaponAttackBuffer = new();
         private IQusapAttackDefinition currentAttack;
         private float phaseTimeRemaining;
+        private float currentPhaseDuration;
         private int attackDirection = 1;
         private bool diveBraking;
         private bool landedDuringAirAttack;
@@ -133,6 +142,7 @@ namespace Qusap
                 combatAllowed = value;
                 if (!combatAllowed)
                 {
+                    weaponAttackBuffer.Clear();
                     combatFeedbackPresenter?.ResetPresentation();
                     CancelIncomingFinishers();
                     CancelCurrentAttack(false);
@@ -145,6 +155,15 @@ namespace Qusap
         public QusapAttackPhase CurrentPhase { get; private set; } = QusapAttackPhase.Idle;
         public QusapAttackType? CurrentAttackType => currentAttack?.AttackType;
         public QusapAttackVariant CurrentAttackVariant { get; private set; } = QusapAttackVariant.None;
+        public QusapWeaponAttackKind CurrentWeaponAttackKind { get; private set; }
+            = QusapWeaponAttackKind.None;
+        public bool IsWeaponAttack => CurrentWeaponAttackKind != QusapWeaponAttackKind.None;
+        public bool HasBufferedWeaponAttack => weaponAttackBuffer.HasPendingPress;
+        public float CurrentPhaseNormalizedProgress => CurrentPhase == QusapAttackPhase.Idle
+            ? 0f
+            : currentPhaseDuration <= 0f
+                ? 1f
+                : Mathf.Clamp01(1f - (phaseTimeRemaining / currentPhaseDuration));
         public int FacingDirection { get; private set; } = 1;
         public int AttackDirection => attackDirection;
         public QusapHitReceiver HitReceiver { get; private set; }
@@ -193,12 +212,17 @@ namespace Qusap
             dashMotor = GetComponent<QusapDashMotor>();
             groundSensor = GetComponent<QusapGroundSensor>();
             hitstunController = GetComponent<QusapHitstunController>();
+            weaponEquipment = GetComponent<QusapWeaponEquipment>();
             finisherDefense = new QusapFinisherParryStateMachine();
             parryAttemptGate = new QusapParryAttemptGate(parryAttemptRecoveryDuration);
             InitializeComboRecognition();
             HitReceiver = GetComponent<QusapHitReceiver>();
             HitReceiver.HitReceived += HandleOwnerHitReceived;
             HitReceiver.FinisherReceived += HandleOwnerFinisherReceived;
+            if (weaponEquipment != null)
+            {
+                weaponEquipment.WeaponTransitioned += HandleWeaponTransitioned;
+            }
             FacingDirection = initialFacingDirection < 0 ? -1 : 1;
             wasGrounded = groundSensor != null && groundSensor.IsGrounded;
 
@@ -219,6 +243,7 @@ namespace Qusap
             attackHitbox.Initialize(this);
             EnsureParryCuePresenter();
             EnsureCombatFeedbackPresenter();
+            EnsureWeaponAttackVisualPresenter();
         }
 
         private void OnValidate()
@@ -316,6 +341,7 @@ namespace Qusap
         private void OnDisable()
         {
             UnsubscribeInputEvents();
+            weaponAttackBuffer.Clear();
             parryCuePresenter?.ResetPresentation();
             combatFeedbackPresenter?.ResetPresentation();
             CancelIncomingFinishers();
@@ -332,6 +358,11 @@ namespace Qusap
             {
                 HitReceiver.HitReceived -= HandleOwnerHitReceived;
                 HitReceiver.FinisherReceived -= HandleOwnerFinisherReceived;
+            }
+
+            if (weaponEquipment != null)
+            {
+                weaponEquipment.WeaponTransitioned -= HandleWeaponTransitioned;
             }
         }
 
@@ -373,18 +404,30 @@ namespace Qusap
 
             if (!IsAttacking)
             {
-                QusapAttackType? requestedAttack = !comboRecognitionEnabled && weakKickPressed
-                    ? QusapAttackType.WeakKick
-                    : !comboRecognitionEnabled && strongKickPressed
-                        ? QusapAttackType.StrongKick
-                        : !comboRecognitionEnabled && headbuttPressed
-                            ? QusapAttackType.Headbutt
-                            : null;
-
-                if (requestedAttack.HasValue)
+                if (!comboRecognitionEnabled)
                 {
-                    // Grounded is sampled exactly once for this button press.
-                    TryStartAttack(requestedAttack.Value, grounded);
+                    if (weakKickPressed)
+                    {
+                        TryStartAttack(QusapAttackType.WeakKick, grounded);
+                    }
+                    else if (strongKickPressed)
+                    {
+                        if (weaponEquipment == null)
+                        {
+                            TryStartAttack(QusapAttackType.StrongKick, grounded);
+                        }
+                        else if (weaponEquipment.HasWeapon)
+                        {
+                            TryStartWeaponAttack(
+                                QusapCombatCommand.WeaponLight,
+                                false,
+                                grounded);
+                        }
+                    }
+                    else if (headbuttPressed)
+                    {
+                        TryStartAttack(QusapAttackType.Headbutt, grounded);
+                    }
                 }
 
                 ApplyMovementLock();
@@ -432,18 +475,50 @@ namespace Qusap
                         : comboBodyAttackAir;
                     break;
                 case QusapCombatCommand.WeaponLight:
-                    selectedVariant = groundedAtPress
-                        ? QusapAttackVariant.StrongKickGround
-                        : QusapAttackVariant.StrongKickAir;
-                    attackData = groundedAtPress
-                        ? comboWeaponLightGround
-                        : comboWeaponLightAir;
-                    break;
+                    return TryStartWeaponAttack(command, true, groundedAtPress);
+                case QusapCombatCommand.WeaponStrong:
+                    return TryStartWeaponAttack(command, true, groundedAtPress);
                 default:
                     return false;
             }
 
             return TryStartConfiguredAttack(selectedVariant, attackData, command);
+        }
+
+        private bool TryStartWeaponAttack(
+            QusapCombatCommand command,
+            bool marksPendingComboStep,
+            bool groundedAtPress)
+        {
+            if (!CanUseWeaponCommands())
+            {
+                return false;
+            }
+
+            QusapWeaponAttackData data = command == QusapCombatCommand.WeaponStrong
+                ? weaponStrongAttack
+                : weaponLightAttack;
+            bool started = command switch
+            {
+                QusapCombatCommand.WeaponLight => TryStartConfiguredAttack(
+                    QusapAttackVariant.WeaponLight,
+                    weaponLightAttack,
+                    marksPendingComboStep ? command : null),
+                QusapCombatCommand.WeaponStrong => TryStartConfiguredAttack(
+                    QusapAttackVariant.WeaponStrong,
+                    weaponStrongAttack,
+                    marksPendingComboStep ? command : null),
+                _ => false
+            };
+
+            if (started && !groundedAtPress)
+            {
+                Vector3 velocity = rb.linearVelocity;
+                velocity.x *= data.AirborneHorizontalVelocityRetention;
+                rb.linearVelocity = velocity;
+            }
+
+            return started;
         }
 
         private bool TryStartConfiguredAttack(
@@ -472,9 +547,15 @@ namespace Qusap
             CurrentComboSetupCommand = comboSetupCommand;
             currentAttackExecutionId++;
             CurrentAttackVariant = selectedVariant;
+            CurrentWeaponAttackKind = selectedVariant == QusapAttackVariant.WeaponStrong
+                ? QusapWeaponAttackKind.Strong
+                : selectedVariant == QusapAttackVariant.WeaponLight
+                    ? QusapWeaponAttackKind.Light
+                    : QusapWeaponAttackKind.None;
             attackDirection = FacingDirection;
             CurrentPhase = QusapAttackPhase.Startup;
             phaseTimeRemaining = currentAttack.StartupTime;
+            currentPhaseDuration = currentAttack.StartupTime;
             diveBraking = false;
             landedDuringAirAttack = false;
             diveConnected = false;
@@ -540,6 +621,29 @@ namespace Qusap
             };
         }
 
+        public QusapWeaponAttackData GetWeaponAttackData(QusapWeaponAttackKind attackKind)
+        {
+            return attackKind switch
+            {
+                QusapWeaponAttackKind.Light => weaponLightAttack,
+                QusapWeaponAttackKind.Strong => weaponStrongAttack,
+                _ => null
+            };
+        }
+
+        public bool TryGetWeaponAttackVisualState(
+            out QusapWeaponAttackKind attackKind,
+            out QusapAttackPhase phase,
+            out float normalizedProgress,
+            out int capturedFacing)
+        {
+            attackKind = CurrentWeaponAttackKind;
+            phase = CurrentPhase;
+            normalizedProgress = CurrentPhaseNormalizedProgress;
+            capturedFacing = attackDirection;
+            return IsWeaponAttack && IsAttacking && CanUseWeaponCommands();
+        }
+
         internal IQusapAttackDefinition GetAttackDefinition(QusapAttackVariant attackVariant)
         {
             if (IsAttacking && CurrentAttackVariant == attackVariant && currentAttack != null)
@@ -555,18 +659,22 @@ namespace Qusap
                 QusapAttackVariant.StrongKickAir => strongKickAir,
                 QusapAttackVariant.HeadbuttGround => headbutt,
                 QusapAttackVariant.DiveHeadbuttAir => diveHeadbuttAir,
+                QusapAttackVariant.WeaponLight => weaponLightAttack,
+                QusapAttackVariant.WeaponStrong => weaponStrongAttack,
                 _ => null
             };
         }
 
         public void CancelAttack()
         {
+            weaponAttackBuffer.Clear();
             CancelCurrentAttack(true);
             ResetComboRecognition();
         }
 
         public void ResetCombatState()
         {
+            weaponAttackBuffer.Clear();
             parryCuePresenter?.ResetForRespawn();
             combatFeedbackPresenter?.ResetForRespawn();
             CancelCurrentAttack(true);
@@ -637,12 +745,21 @@ namespace Qusap
 
         private bool ProcessPendingComboCommands(bool grounded)
         {
-            bool blocked = !comboRecognitionEnabled
-                || !combatAllowed
+            double now = InputState.currentTime;
+            weaponAttackBuffer.DiscardExpired(now);
+
+            bool blocked = !combatAllowed
                 || (hitstunController != null && hitstunController.IsInHitstun)
                 || (dashMotor != null && dashMotor.IsDashing);
             if (blocked)
             {
+                weaponAttackBuffer.Clear();
+                if (IsWeaponAttack
+                    && hitstunController != null
+                    && hitstunController.IsInHitstun)
+                {
+                    CancelCurrentAttack(true);
+                }
                 if (IsComboSetupAttack && dashMotor != null && dashMotor.IsDashing)
                 {
                     CancelCurrentAttack(true);
@@ -654,6 +771,7 @@ namespace Qusap
 
             if (BlocksOffenseForFinisher())
             {
+                weaponAttackBuffer.Clear();
                 inputReader.DiscardPendingCombatCommands();
                 return false;
             }
@@ -673,7 +791,13 @@ namespace Qusap
 
             if (hasPendingComboStep || IsAttacking)
             {
+                BufferOrDiscardCommandsDuringAttack(now);
                 return false;
+            }
+
+            if (weaponAttackBuffer.TryConsume(now, out QusapCombatCommandPress bufferedPress))
+            {
+                return ProcessCombatPress(bufferedPress, grounded);
             }
 
             int processedCount = 0;
@@ -686,69 +810,154 @@ namespace Qusap
                     continue;
                 }
 
-                QusapComboMatchResult preview = comboMatcher.PreviewPress(
-                    press.Command,
-                    press.PressId,
-                    press.Timestamp);
-
-                if (preview.Completed && preview.CompletedComboId.HasValue)
+                if (QusapWeaponAttackInputBuffer.IsWeaponCommand(press.Command)
+                    && !CanUseWeaponCommands())
                 {
-                    if (!IsValidComboTarget(comboTarget))
-                    {
-                        ResetComboRecognition();
-                        return false;
-                    }
-
-                    lastComboMatchResult = comboMatcher.ProcessPress(
-                        press.Command,
-                        press.PressId,
-                        press.Timestamp);
-                    if (!lastComboMatchResult.Completed
-                        || lastComboMatchResult.CompletedComboId != preview.CompletedComboId)
-                    {
-                        ResetComboRecognition();
-                        return false;
-                    }
-
-                    ArmFinisher(lastComboMatchResult.CompletedComboId.Value, comboTarget);
-                    continue;
+                    weaponAttackBuffer.Clear();
+                    ResetComboRecognition();
+                    return false;
                 }
 
-                if (preview.Advanced && preview.CandidatesRemain)
-                {
-                    bool startsNewSequence = !comboMatcher.HasActiveCandidates
-                        || !ContinuesExistingCandidate(preview);
-                    if (!TryStartComboSetupAttack(press.Command, grounded))
-                    {
-                        ResetComboRecognition();
-                        return false;
-                    }
-
-                    pendingComboPress = press;
-                    pendingComboAttackExecutionId = currentAttackExecutionId;
-                    pendingComboStartsNewSequence = startsNewSequence;
-                    hasPendingComboStep = true;
-                    return true;
-                }
-
-                lastComboMatchResult = comboMatcher.ProcessPress(
-                    press.Command,
-                    press.PressId,
-                    press.Timestamp);
-
-                if (!comboMatcher.HasActiveCandidates)
-                {
-                    comboTarget = null;
-                }
-
-                if (TryGetLegacyAttack(press.Command, out QusapAttackType legacyAttack)
-                    && TryStartAttack(legacyAttack, grounded))
+                if (ProcessCombatPress(press, grounded))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private bool ProcessCombatPress(QusapCombatCommandPress press, bool grounded)
+        {
+            bool weaponCommand = QusapWeaponAttackInputBuffer.IsWeaponCommand(press.Command);
+            if (weaponCommand && !CanUseWeaponCommands())
+            {
+                weaponAttackBuffer.Clear();
+                ResetComboRecognition();
+                return false;
+            }
+
+            if (!comboRecognitionEnabled)
+            {
+                if (weaponCommand)
+                {
+                    return TryStartWeaponAttack(press.Command, false, grounded);
+                }
+
+                return TryGetLegacyAttack(press.Command, out QusapAttackType legacy)
+                    && TryStartAttack(legacy, grounded);
+            }
+
+            QusapComboMatchResult preview = comboMatcher.PreviewPress(
+                press.Command,
+                press.PressId,
+                press.Timestamp);
+
+            if (preview.Completed && preview.CompletedComboId.HasValue)
+            {
+                if (!IsValidComboTarget(comboTarget))
+                {
+                    ResetComboRecognition();
+                    return weaponCommand && TryStartWeaponAttack(press.Command, false, grounded);
+                }
+
+                lastComboMatchResult = comboMatcher.ProcessPress(
+                    press.Command,
+                    press.PressId,
+                    press.Timestamp);
+                if (!lastComboMatchResult.Completed
+                    || lastComboMatchResult.CompletedComboId != preview.CompletedComboId)
+                {
+                    ResetComboRecognition();
+                    return false;
+                }
+
+                ArmFinisher(lastComboMatchResult.CompletedComboId.Value, comboTarget);
+                return weaponCommand && TryStartWeaponAttack(press.Command, false, grounded);
+            }
+
+            if (preview.Advanced && preview.CandidatesRemain)
+            {
+                bool startsNewSequence = !comboMatcher.HasActiveCandidates
+                    || !ContinuesExistingCandidate(preview);
+                if (!TryStartComboSetupAttack(press.Command, grounded))
+                {
+                    ResetComboRecognition();
+                    return false;
+                }
+
+                pendingComboPress = press;
+                pendingComboAttackExecutionId = currentAttackExecutionId;
+                pendingComboStartsNewSequence = startsNewSequence;
+                hasPendingComboStep = true;
+                return true;
+            }
+
+            lastComboMatchResult = comboMatcher.ProcessPress(
+                press.Command,
+                press.PressId,
+                press.Timestamp);
+
+            if (!comboMatcher.HasActiveCandidates)
+            {
+                comboTarget = null;
+            }
+
+            if (weaponCommand)
+            {
+                return TryStartWeaponAttack(press.Command, false, grounded);
+            }
+
+            return TryGetLegacyAttack(press.Command, out QusapAttackType legacyAttack)
+                && TryStartAttack(legacyAttack, grounded);
+        }
+
+        private void BufferOrDiscardCommandsDuringAttack(double now)
+        {
+            int processedCount = 0;
+            while (processedCount < MaxComboCommandsPerFixedUpdate
+                && inputReader.TryConsumeCombatCommand(out QusapCombatCommandPress press))
+            {
+                processedCount++;
+                if (press.Command == QusapCombatCommand.Parry)
+                {
+                    continue;
+                }
+
+                if (!QusapWeaponAttackInputBuffer.IsWeaponCommand(press.Command))
+                {
+                    continue;
+                }
+
+                if (!CanUseWeaponCommands())
+                {
+                    weaponAttackBuffer.Clear();
+                    ResetComboRecognition();
+                    return;
+                }
+
+                if (CurrentPhase != QusapAttackPhase.Recovery)
+                {
+                    continue;
+                }
+
+                QusapWeaponAttackData requested = press.Command == QusapCombatCommand.WeaponStrong
+                    ? weaponStrongAttack
+                    : weaponLightAttack;
+                weaponAttackBuffer.TryStore(
+                    press,
+                    now,
+                    requested.InputBufferDuration);
+            }
+        }
+
+        private bool CanUseWeaponCommands()
+        {
+            // Combat-only test rigs built before the equipment system intentionally omit
+            // the component. Real players always contain it; there, ownership is strict.
+            return QusapWeaponAttackRules.CanExecute(
+                QusapCombatCommand.WeaponLight,
+                weaponEquipment == null || weaponEquipment.HasWeapon);
         }
 
         internal void NotifyAttackHit(QusapHitReceiver receiver)
@@ -1288,6 +1497,8 @@ namespace Qusap
                 return;
             }
 
+            weaponAttackBuffer.Clear();
+
             CleanupIncomingFinishers();
             bool eligible = IsEligibleToParry();
             QusapCombatController selected = SelectIncomingFinisher(
@@ -1527,6 +1738,23 @@ namespace Qusap
             combatFeedbackPresenter.Initialize(this, combatFeedbackSettings);
         }
 
+        private void EnsureWeaponAttackVisualPresenter()
+        {
+            QusapEquippedWeaponPresenter equippedPresenter =
+                GetComponent<QusapEquippedWeaponPresenter>();
+            if (equippedPresenter == null)
+            {
+                return;
+            }
+
+            QusapWeaponAttackVisualPresenter presenter =
+                GetComponent<QusapWeaponAttackVisualPresenter>();
+            if (presenter == null)
+            {
+                presenter = gameObject.AddComponent<QusapWeaponAttackVisualPresenter>();
+            }
+        }
+
         private void PublishParryAttemptFeedback(
             QusapCombatCommandPress press,
             QusapCombatController attacker,
@@ -1595,6 +1823,7 @@ namespace Qusap
 
         private void HandleOwnerHitReceived(QusapHitInfo hitInfo)
         {
+            weaponAttackBuffer.Clear();
             // A second attacker must be able to confirm setup hits and register its own
             // finisher without erasing another valid incoming opportunity.
             if (hitInfo.Source == null || !hitInfo.Source.IsComboSetupAttack)
@@ -1602,7 +1831,7 @@ namespace Qusap
                 CancelIncomingFinishers();
             }
 
-            if (IsComboSetupAttack)
+            if (IsComboSetupAttack || IsWeaponAttack)
             {
                 CancelCurrentAttack(true);
             }
@@ -1612,8 +1841,9 @@ namespace Qusap
 
         private void HandleOwnerFinisherReceived(QusapFinisherHitInfo hitInfo)
         {
+            weaponAttackBuffer.Clear();
             CancelIncomingFinishers();
-            if (IsComboSetupAttack)
+            if (IsComboSetupAttack || IsWeaponAttack)
             {
                 CancelCurrentAttack(true);
             }
@@ -1775,7 +2005,7 @@ namespace Qusap
 
                     case QusapAttackPhase.Active:
                         attackHitbox.EndAttack();
-                        EnterRecovery(currentAttack.RecoveryTime - overflowTime);
+                        EnterRecovery(currentAttack.RecoveryTime, overflowTime);
                         break;
 
                     case QusapAttackPhase.Recovery:
@@ -1788,7 +2018,8 @@ namespace Qusap
         private void BeginActiveWindow(float overflowTime)
         {
             CurrentPhase = QusapAttackPhase.Active;
-            phaseTimeRemaining = currentAttack.ActiveDuration - overflowTime;
+            currentPhaseDuration = currentAttack.ActiveDuration;
+            phaseTimeRemaining = currentPhaseDuration - overflowTime;
 
             if (CurrentAttackVariant == QusapAttackVariant.DiveHeadbuttAir)
             {
@@ -1804,10 +2035,11 @@ namespace Qusap
             AttackPhaseChanged?.Invoke(CurrentAttackVariant, CurrentPhase);
         }
 
-        private void EnterRecovery(float duration)
+        private void EnterRecovery(float duration, float elapsedTime = 0f)
         {
             CurrentPhase = QusapAttackPhase.Recovery;
-            phaseTimeRemaining = Mathf.Max(duration, 0f);
+            currentPhaseDuration = Mathf.Max(duration, 0f);
+            phaseTimeRemaining = currentPhaseDuration - Mathf.Max(elapsedTime, 0f);
             AttackPhaseChanged?.Invoke(CurrentAttackVariant, CurrentPhase);
             if (phaseTimeRemaining <= 0f)
             {
@@ -1828,8 +2060,10 @@ namespace Qusap
             currentAttack = null;
             ClearComboSetupAttackState();
             phaseTimeRemaining = 0f;
+            currentPhaseDuration = 0f;
             CurrentPhase = QusapAttackPhase.Idle;
             CurrentAttackVariant = QusapAttackVariant.None;
+            CurrentWeaponAttackKind = QusapWeaponAttackKind.None;
             AttackFinished?.Invoke(finishedAttack);
             AttackEnded?.Invoke(finishedVariant, false);
             AttackPhaseChanged?.Invoke(QusapAttackVariant.None, QusapAttackPhase.Idle);
@@ -1847,6 +2081,8 @@ namespace Qusap
             {
                 attackHitbox?.EndAttack();
                 ClearComboSetupAttackState();
+                CurrentWeaponAttackKind = QusapWeaponAttackKind.None;
+                currentPhaseDuration = 0f;
                 CurrentPhase = QusapAttackPhase.Idle;
                 CurrentAttackVariant = QusapAttackVariant.None;
                 return;
@@ -1858,8 +2094,10 @@ namespace Qusap
             currentAttack = null;
             ClearComboSetupAttackState();
             phaseTimeRemaining = 0f;
+            currentPhaseDuration = 0f;
             CurrentPhase = QusapAttackPhase.Idle;
             CurrentAttackVariant = QusapAttackVariant.None;
+            CurrentWeaponAttackKind = QusapWeaponAttackKind.None;
             diveBraking = false;
             landedDuringAirAttack = false;
             diveConnected = false;
@@ -1917,6 +2155,8 @@ namespace Qusap
             comboWeaponLightGround ??= QusapAttackData.CreateComboWeaponLightGround();
             comboBodyAttackAir ??= QusapAirAttackData.CreateComboBodyAttackAir();
             comboWeaponLightAir ??= QusapAirAttackData.CreateComboWeaponLightAir();
+            weaponLightAttack ??= QusapWeaponAttackData.CreateLight();
+            weaponStrongAttack ??= QusapWeaponAttackData.CreateStrong();
 
             weakKick.SetAttackType(QusapAttackType.WeakKick);
             strongKick.SetAttackType(QusapAttackType.StrongKick);
@@ -1929,6 +2169,9 @@ namespace Qusap
             comboBodyAttackAir.SetAttackType(QusapAttackType.WeakKick);
             comboWeaponLightAir.SetAttackType(QusapAttackType.StrongKick);
 
+            weaponLightAttack.Validate();
+            weaponStrongAttack.Validate();
+
             weakKick.Validate();
             strongKick.Validate();
             headbutt.Validate();
@@ -1939,6 +2182,24 @@ namespace Qusap
             comboWeaponLightGround.Validate();
             comboBodyAttackAir.Validate();
             comboWeaponLightAir.Validate();
+        }
+
+        private void HandleWeaponTransitioned(QusapWeaponTransition transition)
+        {
+            if (transition.Type != QusapWeaponTransitionType.Dropped
+                && transition.Type != QusapWeaponTransitionType.Disarmed
+                && transition.Type != QusapWeaponTransitionType.VoluntarySwapThrow)
+            {
+                return;
+            }
+
+            weaponAttackBuffer.Clear();
+            if (IsWeaponAttack)
+            {
+                CancelCurrentAttack(true);
+            }
+
+            ResetComboRecognition();
         }
 
         private void ClearComboSetupAttackState()

@@ -39,7 +39,7 @@ namespace Qusap.Tests
             attacker.StartSetup(QusapCombatCommand.WeaponLight, 1d, grounded: true);
             Assert.That(attacker.Combat.IsComboSetupAttack, Is.True);
             Assert.That(attacker.Combat.CurrentComboSetupCommand, Is.EqualTo(QusapCombatCommand.WeaponLight));
-            Assert.That(attacker.Combat.CurrentAttackVariant, Is.EqualTo(QusapAttackVariant.StrongKickGround));
+            Assert.That(attacker.Combat.CurrentAttackVariant, Is.EqualTo(QusapAttackVariant.WeaponLight));
         }
 
         [Test]
@@ -246,11 +246,11 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void AirWeaponLightCandidateUsesAirSetupProfile()
+        public void AirWeaponLightCandidateUsesSwordAttackProfile()
         {
             PlayerHarness attacker = CreatePlayer("Attacker");
             attacker.StartSetup(QusapCombatCommand.WeaponLight, 1d, grounded: false);
-            Assert.That(attacker.Combat.CurrentAttackVariant, Is.EqualTo(QusapAttackVariant.StrongKickAir));
+            Assert.That(attacker.Combat.CurrentAttackVariant, Is.EqualTo(QusapAttackVariant.WeaponLight));
             Assert.That(attacker.ActiveAttack.Damage, Is.EqualTo(1f));
             Assert.That(attacker.ActiveAttack.HorizontalKnockback, Is.EqualTo(1.25f));
         }

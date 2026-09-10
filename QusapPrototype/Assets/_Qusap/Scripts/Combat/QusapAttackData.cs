@@ -26,7 +26,9 @@ namespace Qusap
         StrongKickGround,
         StrongKickAir,
         HeadbuttGround,
-        DiveHeadbuttAir
+        DiveHeadbuttAir,
+        WeaponLight,
+        WeaponStrong
     }
 
     public interface IQusapAttackDefinition

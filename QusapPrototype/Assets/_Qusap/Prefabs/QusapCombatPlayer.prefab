@@ -491,6 +491,7 @@ GameObject:
   - component: {fileID: 8392171379635640032}
   - component: {fileID: 1608209498019051649}
   - component: {fileID: 1868079215355723335}
+  - component: {fileID: 1868079215355723336}
   m_Layer: 0
   m_Name: QusapCombatPlayer
   m_TagString: Untagged
@@ -790,6 +791,38 @@ MonoBehaviour:
     verticalKnockback: 4
     hitstunDuration: 0.4
     lockHorizontalMovement: 1
+  weaponLightAttack:
+    attackKind: 1
+    startupTime: 0.1
+    activeDuration: 0.08
+    recoveryTime: 0.16
+    inputBufferDuration: 0.12
+    damage: 1
+    hitstunDuration: 0.2
+    horizontalKnockback: 1.25
+    verticalKnockback: 0.25
+    hitboxSize: {x: 1.15, y: 0.65}
+    hitboxOffset: {x: 0.8, y: -0.25}
+    hitboxDepth: 1
+    airborneHorizontalVelocityRetention: 0.98
+    lockHorizontalMovement: 0
+    speedMultiplier: 1
+  weaponStrongAttack:
+    attackKind: 2
+    startupTime: 0.18
+    activeDuration: 0.1
+    recoveryTime: 0.32
+    inputBufferDuration: 0.12
+    damage: 1
+    hitstunDuration: 0.24
+    horizontalKnockback: 7
+    verticalKnockback: 3
+    hitboxSize: {x: 1.35, y: 0.75}
+    hitboxOffset: {x: 0.9, y: -0.25}
+    hitboxDepth: 1
+    airborneHorizontalVelocityRetention: 0.92
+    lockHorizontalMovement: 1
+    speedMultiplier: 1
 --- !u!114 &7623187612098060891
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -898,6 +931,38 @@ MonoBehaviour:
   socketOffset: {x: 1.15, y: 0.25, z: -0.35}
   socketEulerAngles: {x: 0, y: 0, z: -12}
   visualScale: {x: 0.7, y: 0.7, z: 0.7}
+--- !u!114 &1868079215355723336
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4561029578319102087}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6c546fe90d94abcb24db31d64433447, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapWeaponAttackVisualPresenter
+  combatController: {fileID: 7623187612098060892}
+  equippedPresenter: {fileID: 1868079215355723335}
+  lightProfile:
+    windupLocalPosition: {x: 0, y: 0, z: 0}
+    windupLocalEulerAngles: {x: 0, y: 0, z: 24}
+    strikeLocalPosition: {x: 0.06, y: 0.02, z: 0}
+    strikeLocalEulerAngles: {x: 0, y: 0, z: -38}
+    recoveryLocalPosition: {x: 0, y: 0, z: 0}
+    recoveryLocalEulerAngles: {x: 0, y: 0, z: -8}
+    interpolation: 1
+    arcAmplitude: 7
+  strongProfile:
+    windupLocalPosition: {x: -0.08, y: 0.04, z: 0}
+    windupLocalEulerAngles: {x: 0, y: 0, z: 58}
+    strikeLocalPosition: {x: 0.14, y: -0.04, z: 0}
+    strikeLocalEulerAngles: {x: 0, y: 0, z: -92}
+    recoveryLocalPosition: {x: 0.04, y: -0.02, z: 0}
+    recoveryLocalEulerAngles: {x: 0, y: 0, z: -20}
+    interpolation: 1
+    arcAmplitude: 18
 --- !u!1 &4858569073240883571
 GameObject:
   m_ObjectHideFlags: 0

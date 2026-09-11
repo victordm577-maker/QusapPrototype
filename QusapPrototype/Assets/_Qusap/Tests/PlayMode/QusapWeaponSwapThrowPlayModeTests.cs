@@ -513,10 +513,12 @@ namespace Qusap.Tests
         {
 #if UNITY_EDITOR
             Gamepad gamepad;
+            bool ownsGamepad = false;
             if (Gamepad.all.Count == 0)
             {
                 gamepad = InputSystem.AddDevice<Gamepad>();
                 addedInputDevices.Add(gamepad);
+                ownsGamepad = true;
             }
             else
             {
@@ -535,21 +537,35 @@ namespace Qusap.Tests
             bootstrap.PlayerTwoEquipment.GetComponent<Rigidbody>().position =
                 white.transform.position;
 
-            InputSystem.QueueStateEvent(gamepad, new GamepadState
-            {
-                rightTrigger = 1f
-            });
+            InputSystem.QueueDeltaStateEvent(gamepad.rightTrigger, 0f);
             InputSystem.Update();
-            Assert.That(
-                bootstrap.PlayerTwoEquipment.GetComponent<QusapInputReader>()
-                    .HasPendingWeaponSwapThrow,
-                Is.True);
-            yield return null;
-            yield return null;
+            try
+            {
+                InputSystem.QueueDeltaStateEvent(gamepad.rightTrigger, 1f);
+                InputSystem.Update();
+                Assert.That(
+                    bootstrap.PlayerTwoEquipment.GetComponent<QusapInputReader>()
+                        .HasPendingWeaponSwapThrow,
+                    Is.True);
+                yield return null;
+                yield return null;
 
-            Assert.That(bootstrap.PlayerTwoEquipment.EquippedWeapon,
-                Is.SameAs(bootstrap.InitialWhiteWeapon));
-            InputSystem.QueueStateEvent(gamepad, new GamepadState());
+                Assert.That(bootstrap.PlayerTwoEquipment.EquippedWeapon,
+                    Is.SameAs(bootstrap.InitialWhiteWeapon));
+            }
+            finally
+            {
+                if (gamepad.added)
+                {
+                    InputSystem.QueueDeltaStateEvent(gamepad.rightTrigger, 0f);
+                    InputSystem.Update();
+                    if (ownsGamepad)
+                    {
+                        InputSystem.RemoveDevice(gamepad);
+                        addedInputDevices.Remove(gamepad);
+                    }
+                }
+            }
 #else
             yield return null;
             Assert.Ignore("Authoritative gamepad integration requires the Unity Editor.");

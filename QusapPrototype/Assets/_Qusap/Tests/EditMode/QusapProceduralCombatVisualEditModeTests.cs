@@ -156,6 +156,218 @@ namespace Qusap.Tests
                 Is.EqualTo(QusapProceduralCombatMotionId.WeaponLightSecond));
         }
 
+        [Test]
+        public void DamageComboLightsUseLargeOpposedSwordCutsWithFullBodyWeightTransfer()
+        {
+            QusapProceduralCombatMotion first = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightFirst);
+            QusapProceduralCombatMotion second = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightSecond);
+            float firstArc = first.Impact.WeaponLocalEulerAngles.z
+                - first.Preparation.WeaponLocalEulerAngles.z;
+            float secondArc = second.Impact.WeaponLocalEulerAngles.z
+                - second.Preparation.WeaponLocalEulerAngles.z;
+
+            Assert.That(Mathf.Abs(firstArc), Is.GreaterThanOrEqualTo(100f));
+            Assert.That(Mathf.Abs(secondArc), Is.GreaterThanOrEqualTo(110f));
+            Assert.That(Mathf.Sign(firstArc), Is.Not.EqualTo(Mathf.Sign(secondArc)));
+            Assert.That(Vector3.Distance(first.Preparation.WeaponLocalPosition,
+                first.Impact.WeaponLocalPosition), Is.GreaterThan(0.35f));
+            Assert.That(Vector3.Distance(second.Preparation.WeaponLocalPosition,
+                second.Impact.WeaponLocalPosition), Is.GreaterThan(0.25f));
+            Assert.That(first.Preparation.BodyLocalEulerAngles.z,
+                Is.GreaterThan(10f));
+            Assert.That(second.Preparation.BodyLocalEulerAngles.z,
+                Is.LessThan(-10f));
+            Assert.That(first.Impact.LeftFootLocalPosition.x,
+                Is.GreaterThan(0.2f));
+            Assert.That(second.Impact.RightFootLocalPosition.x,
+                Is.GreaterThan(0.2f));
+            Assert.That(Mathf.Abs(first.FollowThrough.WeaponLocalEulerAngles.z),
+                Is.GreaterThan(Mathf.Abs(first.Impact.WeaponLocalEulerAngles.z)));
+            Assert.That(Mathf.Abs(second.FollowThrough.WeaponLocalEulerAngles.z),
+                Is.GreaterThan(Mathf.Abs(second.Impact.WeaponLocalEulerAngles.z)));
+        }
+
+        [Test]
+        public void DamageKickPlantsSupportFootAndMovesAttackFootWithinAuthoredRange()
+        {
+            QusapProceduralCombatMotion kick = profile.GetMotion(
+                QusapProceduralCombatMotionId.DamageBodyAttack);
+
+            Assert.That(kick.Impact.LeftFootLocalPosition.x, Is.InRange(0.55f, 0.60f));
+            Assert.That(kick.Impact.RightFootLocalPosition.magnitude, Is.LessThan(0.08f));
+            Assert.That(kick.Preparation.BodyLocalPosition.y, Is.LessThan(-0.1f));
+            Assert.That(Mathf.Abs(kick.Impact.BodyLocalEulerAngles.z),
+                Is.GreaterThan(15f));
+            Assert.That(kick.Preparation.WeaponLocalPosition.magnitude,
+                Is.GreaterThan(0.1f));
+            Assert.That(Mathf.Abs(kick.FollowThrough.WeaponLocalEulerAngles.z),
+                Is.GreaterThan(40f));
+            Assert.That(kick.ReturnToNeutral.WeaponLocalPosition.y,
+                Is.GreaterThan(0.14f));
+        }
+
+        [Test]
+        public void DamageFinisherTelegraphsThenTraversesTwoHundredTenDegreeArcAtImpact()
+        {
+            QusapProceduralCombatMotion finisher = profile.GetMotion(
+                QusapProceduralCombatMotionId.DamageFinisher);
+            QusapProceduralCombatMotion first = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightFirst);
+            float arc = Mathf.Abs(finisher.Impact.WeaponLocalEulerAngles.z
+                - finisher.Preparation.WeaponLocalEulerAngles.z);
+
+            Assert.That(arc, Is.InRange(190f, 220f));
+            Assert.That(finisher.Preparation.WeaponLocalPosition.y,
+                Is.GreaterThan(0.25f));
+            Assert.That(finisher.Preparation.WeaponLocalPosition.x,
+                Is.LessThan(-0.25f));
+            Assert.That(Mathf.Abs(finisher.Preparation.LeftFootLocalPosition.x
+                - finisher.Preparation.RightFootLocalPosition.x),
+                Is.GreaterThan(0.4f));
+            Assert.That(finisher.FollowThrough.WeaponLocalPosition.magnitude,
+                Is.GreaterThan(finisher.Impact.WeaponLocalPosition.magnitude));
+            Assert.That(Mathf.Abs(finisher.FollowThrough.WeaponLocalEulerAngles.z),
+                Is.GreaterThan(Mathf.Abs(finisher.Impact.WeaponLocalEulerAngles.z)));
+            Assert.That(finisher.Impact.BodyLocalPosition.magnitude,
+                Is.GreaterThan(first.Impact.BodyLocalPosition.magnitude));
+
+            QusapProceduralCombatPoseValue activePeak = finisher.Evaluate(
+                QusapAttackPhase.Active, 0.68f);
+            Assert.That(activePeak.WeaponLocalPosition,
+                Is.EqualTo(finisher.Impact.WeaponLocalPosition));
+            Assert.That(activePeak.WeaponLocalEulerAngles,
+                Is.EqualTo(finisher.Impact.WeaponLocalEulerAngles));
+        }
+
+        [Test]
+        public void DamageComboRecoverySilhouettesPrepareTheFollowingAuthoredStep()
+        {
+            QusapProceduralCombatMotion first = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightFirst);
+            QusapProceduralCombatMotion second = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightSecond);
+            QusapProceduralCombatMotion kick = profile.GetMotion(
+                QusapProceduralCombatMotionId.DamageBodyAttack);
+            QusapProceduralCombatMotion finisher = profile.GetMotion(
+                QusapProceduralCombatMotionId.DamageFinisher);
+
+            Assert.That(Mathf.Abs(first.ReturnToNeutral.WeaponLocalEulerAngles.z
+                - second.Preparation.WeaponLocalEulerAngles.z), Is.LessThanOrEqualTo(45f));
+            Assert.That(Mathf.Abs(second.ReturnToNeutral.WeaponLocalEulerAngles.z
+                - kick.Preparation.WeaponLocalEulerAngles.z), Is.LessThanOrEqualTo(20f));
+            Assert.That(Mathf.Abs(kick.ReturnToNeutral.WeaponLocalEulerAngles.z
+                - finisher.Preparation.WeaponLocalEulerAngles.z), Is.LessThanOrEqualTo(30f));
+        }
+
+        [Test]
+        public void DamageArtPassCurvesAreDistinctFiniteAndClamped()
+        {
+            QusapProceduralCombatMotion first = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightFirst);
+            QusapProceduralCombatMotion second = profile.GetMotion(
+                QusapProceduralCombatMotionId.WeaponLightSecond);
+            QusapProceduralCombatMotion finisher = profile.GetMotion(
+                QusapProceduralCombatMotionId.DamageFinisher);
+
+            Assert.That(Mathf.Abs(first.StartupCurve.Evaluate(0.72f)
+                - second.StartupCurve.Evaluate(0.72f)), Is.GreaterThan(0.01f));
+            Assert.That(finisher.StartupCurve.Evaluate(0.5f),
+                Is.LessThan(first.StartupCurve.Evaluate(0.5f)));
+            foreach (QusapProceduralCombatMotionId id in new[]
+            {
+                QusapProceduralCombatMotionId.WeaponLightFirst,
+                QusapProceduralCombatMotionId.WeaponLightSecond,
+                QusapProceduralCombatMotionId.DamageBodyAttack,
+                QusapProceduralCombatMotionId.DamageFinisher
+            })
+            {
+                QusapProceduralCombatMotion motion = profile.GetMotion(id);
+                foreach (float progress in new[] { 0f, 0.25f, 0.5f, 0.75f, 1f })
+                {
+                    QusapProceduralCombatPoseValue value = motion.Evaluate(
+                        QusapAttackPhase.Active, progress);
+                    Assert.That(float.IsFinite(value.BodyLocalPosition.x), Is.True, id.ToString());
+                    Assert.That(Mathf.Abs(value.BodyLocalPosition.x),
+                        Is.LessThanOrEqualTo(profile.SafeTranslationLimit), id.ToString());
+                    Assert.That(Mathf.Abs(value.WeaponLocalEulerAngles.z),
+                        Is.LessThanOrEqualTo(profile.SafeRotationLimit), id.ToString());
+                }
+            }
+        }
+
+        [Test]
+        public void EveryDamageComboPoseMirrorsFromCapturedFacingWithoutScaleInversion()
+        {
+            foreach ((QusapCombatCommand command, QusapComboId? combo, int step,
+                bool finisher) in new[]
+            {
+                (QusapCombatCommand.WeaponLight, (QusapComboId?)null, 0, false),
+                (QusapCombatCommand.WeaponLight, (QusapComboId?)null, 1, false),
+                (QusapCombatCommand.BodyAttack, (QusapComboId?)QusapComboId.Damage, 2, false),
+                (QusapCombatCommand.WeaponStrong, (QusapComboId?)QusapComboId.Damage, 3, true)
+            })
+            {
+                var rightContext = new QusapCombatVisualContext(
+                    20, command, combo, step, finisher, 1,
+                    QusapAttackPhase.Active, 0.68f);
+                var leftContext = new QusapCombatVisualContext(
+                    21, command, combo, step, finisher, -1,
+                    QusapAttackPhase.Active, 0.68f);
+                QusapProceduralCombatPoseValue right = profile.Evaluate(rightContext, out _);
+                QusapProceduralCombatPoseValue left = profile.Evaluate(leftContext, out _);
+
+                Assert.That(left.BodyLocalPosition.x,
+                    Is.EqualTo(-right.BodyLocalPosition.x).Within(0.00001f));
+                Assert.That(left.WeaponLocalPosition.x,
+                    Is.EqualTo(-right.WeaponLocalPosition.x).Within(0.00001f));
+                Assert.That(left.WeaponLocalPosition.y,
+                    Is.EqualTo(right.WeaponLocalPosition.y).Within(0.00001f));
+                Assert.That(left.WeaponLocalEulerAngles.z,
+                    Is.EqualTo(-right.WeaponLocalEulerAngles.z).Within(0.00001f));
+            }
+        }
+
+        [Test]
+        public void AssignedProfileSerializesDamageArtPassInsteadOfDependingOnFallbacks()
+        {
+            QusapProceduralCombatVisualProfile assigned =
+                AssetDatabase.LoadAssetAtPath<QusapProceduralCombatVisualProfile>(
+                    DefaultProfilePath);
+            var serialized = new SerializedObject(assigned);
+
+            Assert.That(serialized.FindProperty("contentVersion").intValue,
+                Is.GreaterThanOrEqualTo(1));
+            Assert.That(serialized.FindProperty("weaponLightFirst")
+                .FindPropertyRelative("impact")
+                .FindPropertyRelative("weaponLocalEulerAngles").vector3Value.z,
+                Is.EqualTo(-58f));
+            Assert.That(serialized.FindProperty("damageBodyAttack")
+                .FindPropertyRelative("impact")
+                .FindPropertyRelative("leftFootLocalPosition").vector3Value.x,
+                Is.EqualTo(0.58f));
+            Assert.That(serialized.FindProperty("damageFinisher")
+                .FindPropertyRelative("preparation")
+                .FindPropertyRelative("weaponLocalEulerAngles").vector3Value.z,
+                Is.EqualTo(105f));
+        }
+
+        [Test]
+        public void OutOfScopeAttackChoreographiesKeepTheirPreviousAuthoredValues()
+        {
+            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.WeaponStrong)
+                .Preparation.WeaponLocalEulerAngles.z, Is.EqualTo(78f));
+            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.Headbutt)
+                .Impact.BodyLocalPosition.x, Is.EqualTo(0.29f));
+            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.DisarmFinisher)
+                .Impact.BodyLocalPosition.x, Is.EqualTo(0.36f));
+            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.LaunchWeaponLight)
+                .Impact.WeaponLocalEulerAngles.z, Is.EqualTo(58f));
+            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.LaunchFinisher)
+                .Impact.LeftFootLocalPosition.y, Is.EqualTo(0.36f));
+        }
+
         [TestCase(QusapComboId.Damage, QusapProceduralCombatMotionId.DamageFinisher)]
         [TestCase(QusapComboId.Disarm, QusapProceduralCombatMotionId.DisarmFinisher)]
         [TestCase(QusapComboId.Launch, QusapProceduralCombatMotionId.LaunchFinisher)]

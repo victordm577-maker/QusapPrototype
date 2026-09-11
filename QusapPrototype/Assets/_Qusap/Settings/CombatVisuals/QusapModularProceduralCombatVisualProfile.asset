@@ -12,6 +12,1268 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b84c6a3be9a34b6d9d2eb28f68868e27, type: 3}
   m_Name: QusapModularProceduralCombatVisualProfile
   m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapProceduralCombatVisualProfile
+  contentVersion: 1
   globalIntensity: 1
   safeTranslationLimit: 1.25
   safeRotationLimit: 220
+  bodyAttack:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.07, y: 0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 7}
+      leftFootLocalPosition: {x: -0.11, y: 0.06, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -22}
+      rightFootLocalPosition: {x: 0.04, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 8}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    impact:
+      bodyLocalPosition: {x: 0.08, y: 0.01, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -9}
+      leftFootLocalPosition: {x: 0.34, y: 0.13, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 38}
+      rightFootLocalPosition: {x: -0.05, y: -0.01, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -10}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    followThrough:
+      bodyLocalPosition: {x: 0.04, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -5}
+      leftFootLocalPosition: {x: 0.27, y: 0.08, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 28}
+      rightFootLocalPosition: {x: -0.03, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -6}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    returnToNeutral:
+      bodyLocalPosition: {x: -0.015, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 2}
+      leftFootLocalPosition: {x: 0.04, y: 0.01, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 5}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  weaponStrong:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.12, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 13}
+      leftFootLocalPosition: {x: -0.08, y: 0.04, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -5.85}
+      rightFootLocalPosition: {x: 0.08, y: -0.04, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 4.55}
+      weaponLocalPosition: {x: -0.14, y: 0.09, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 78}
+    impact:
+      bodyLocalPosition: {x: 0.096, y: 0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -11.7}
+      leftFootLocalPosition: {x: 0.04, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 5.2}
+      rightFootLocalPosition: {x: -0.04, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -3.9}
+      weaponLocalPosition: {x: 0.18, y: -0.09, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -82}
+    followThrough:
+      bodyLocalPosition: {x: 0.054, y: 0.01, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -7.15}
+      leftFootLocalPosition: {x: 0.024, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: -0.024, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.1, y: -0.05, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -58}
+    returnToNeutral:
+      bodyLocalPosition: {x: -0.0144, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 1.56}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.018, y: -0.009, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -10.44}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  headbutt:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.16, y: 0.01, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 12}
+      leftFootLocalPosition: {x: 0.06, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -8}
+      rightFootLocalPosition: {x: 0.08, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -9}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    impact:
+      bodyLocalPosition: {x: 0.29, y: 0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -18}
+      leftFootLocalPosition: {x: -0.08, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 13}
+      rightFootLocalPosition: {x: -0.06, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 11}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    followThrough:
+      bodyLocalPosition: {x: 0.21, y: 0.01, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -13}
+      leftFootLocalPosition: {x: -0.05, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 8}
+      rightFootLocalPosition: {x: -0.04, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 7}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    returnToNeutral:
+      bodyLocalPosition: {x: 0.03, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -2}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  disarmFinisher:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.22, y: -0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 17}
+      leftFootLocalPosition: {x: 0.09, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -12}
+      rightFootLocalPosition: {x: 0.11, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -14}
+      weaponLocalPosition: {x: -0.05, y: 0.04, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 22}
+    impact:
+      bodyLocalPosition: {x: 0.36, y: 0.04, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -24}
+      leftFootLocalPosition: {x: -0.11, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 16}
+      rightFootLocalPosition: {x: -0.09, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 14}
+      weaponLocalPosition: {x: -0.08, y: 0.02, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 30}
+    followThrough:
+      bodyLocalPosition: {x: 0.25, y: 0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -16}
+      leftFootLocalPosition: {x: -0.06, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 9}
+      rightFootLocalPosition: {x: -0.05, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 8}
+      weaponLocalPosition: {x: -0.05, y: 0.01, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 20}
+    returnToNeutral:
+      bodyLocalPosition: {x: 0.04, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -3}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  launchWeaponLight:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.07, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 8}
+      leftFootLocalPosition: {x: -0.05, y: 0.035, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -3.6}
+      rightFootLocalPosition: {x: 0.06, y: -0.03, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 2.8}
+      weaponLocalPosition: {x: -0.05, y: -0.07, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -46}
+    impact:
+      bodyLocalPosition: {x: 0.056, y: 0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -7.2}
+      leftFootLocalPosition: {x: 0.025, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 3.2}
+      rightFootLocalPosition: {x: -0.03, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -2.4}
+      weaponLocalPosition: {x: 0.12, y: 0.14, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 58}
+    followThrough:
+      bodyLocalPosition: {x: 0.0315, y: 0.01, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -4.4}
+      leftFootLocalPosition: {x: 0.015, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: -0.018, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.07, y: 0.09, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 42}
+    returnToNeutral:
+      bodyLocalPosition: {x: -0.0084, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0.96}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.0126, y: 0.0162, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 7.56}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  launchFinisher:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.13, y: -0.06, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 13}
+      leftFootLocalPosition: {x: -0.1, y: -0.02, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -20}
+      rightFootLocalPosition: {x: 0.08, y: -0.03, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 12}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    impact:
+      bodyLocalPosition: {x: 0.12, y: 0.14, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -15}
+      leftFootLocalPosition: {x: 0.31, y: 0.36, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 44}
+      rightFootLocalPosition: {x: -0.07, y: -0.02, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -13}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    followThrough:
+      bodyLocalPosition: {x: 0.08, y: 0.09, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -10}
+      leftFootLocalPosition: {x: 0.23, y: 0.28, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 34}
+      rightFootLocalPosition: {x: -0.05, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -9}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    returnToNeutral:
+      bodyLocalPosition: {x: -0.02, y: 0.02, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 3}
+      leftFootLocalPosition: {x: 0.04, y: 0.05, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 6}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  weaponLightFirst:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.21, y: 0.035, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 26}
+      leftFootLocalPosition: {x: 0.12, y: 0.045, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -20}
+      rightFootLocalPosition: {x: -0.1, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: -0.18, y: 0.18, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 58}
+    impact:
+      bodyLocalPosition: {x: 0.2, y: -0.045, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -30}
+      leftFootLocalPosition: {x: 0.3, y: 0.075, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 30}
+      rightFootLocalPosition: {x: -0.1, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.25, y: -0.08, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -58}
+    followThrough:
+      bodyLocalPosition: {x: 0.24, y: -0.055, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -35}
+      leftFootLocalPosition: {x: 0.33, y: 0.025, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 22}
+      rightFootLocalPosition: {x: -0.1, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.32, y: -0.16, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -78}
+    returnToNeutral:
+      bodyLocalPosition: {x: 0.04, y: -0.01, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -6}
+      leftFootLocalPosition: {x: 0.05, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: -0.02, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.08, y: -0.03, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -18}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0.18
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.72
+        value: 0.48
+        inSlope: 1.35
+        outSlope: 1.35
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 2.1
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 1.35
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.62
+        value: 0.82
+        inSlope: 0.8
+        outSlope: 0.8
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0.25
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  weaponLightSecond:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: 0.17, y: -0.045, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -24}
+      leftFootLocalPosition: {x: -0.1, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0.12, y: 0.045, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -22}
+      weaponLocalPosition: {x: 0.18, y: -0.1, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -62}
+    impact:
+      bodyLocalPosition: {x: -0.13, y: 0.085, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 29}
+      leftFootLocalPosition: {x: -0.1, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0.31, y: 0.1, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 32}
+      weaponLocalPosition: {x: 0.3, y: 0.19, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 64}
+    followThrough:
+      bodyLocalPosition: {x: -0.17, y: 0.11, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 34}
+      leftFootLocalPosition: {x: -0.1, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0.34, y: 0.06, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 24}
+      weaponLocalPosition: {x: 0.36, y: 0.25, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 82}
+    returnToNeutral:
+      bodyLocalPosition: {x: -0.03, y: 0.015, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 6}
+      leftFootLocalPosition: {x: -0.02, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0.05, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0.09, y: 0.06, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 20}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0.3
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.58
+        value: 0.42
+        inSlope: 1.25
+        outSlope: 1.25
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1.75
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 1.35
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.62
+        value: 0.82
+        inSlope: 0.8
+        outSlope: 0.8
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0.25
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  damageBodyAttack:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.16, y: -0.11, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 18}
+      leftFootLocalPosition: {x: -0.1, y: 0.1, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -24}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: -0.18, y: 0.16, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 35}
+    impact:
+      bodyLocalPosition: {x: -0.14, y: 0.015, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 28}
+      leftFootLocalPosition: {x: 0.58, y: 0.26, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 52}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: -0.24, y: 0.26, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 52}
+    followThrough:
+      bodyLocalPosition: {x: -0.17, y: 0.025, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 32}
+      leftFootLocalPosition: {x: 0.55, y: 0.23, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 46}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: -0.22, y: 0.28, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 62}
+    returnToNeutral:
+      bodyLocalPosition: {x: -0.07, y: -0.035, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 10}
+      leftFootLocalPosition: {x: 0.1, y: 0.04, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 10}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: -0.1, y: 0.16, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 75}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0.12
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.7
+        value: 0.38
+        inSlope: 1.4
+        outSlope: 1.4
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 2.3
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 1.05
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.58
+        value: 0.68
+        inSlope: 1.15
+        outSlope: 1.15
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0.45
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+  damageFinisher:
+    neutral:
+      bodyLocalPosition: {x: 0, y: 0, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 0}
+      leftFootLocalPosition: {x: 0, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      rightFootLocalPosition: {x: 0, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 0}
+      weaponLocalPosition: {x: 0, y: 0, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 0}
+    preparation:
+      bodyLocalPosition: {x: -0.31, y: -0.15, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: 36}
+      leftFootLocalPosition: {x: -0.27, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: -18}
+      rightFootLocalPosition: {x: 0.29, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: 16}
+      weaponLocalPosition: {x: -0.28, y: 0.28, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: 105}
+    impact:
+      bodyLocalPosition: {x: 0.31, y: -0.04, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -39}
+      leftFootLocalPosition: {x: 0.34, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 12}
+      rightFootLocalPosition: {x: -0.25, y: 0.08, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -32}
+      weaponLocalPosition: {x: 0.36, y: -0.2, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -105}
+    followThrough:
+      bodyLocalPosition: {x: 0.36, y: -0.055, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -45}
+      leftFootLocalPosition: {x: 0.38, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 8}
+      rightFootLocalPosition: {x: -0.29, y: 0.045, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -38}
+      weaponLocalPosition: {x: 0.43, y: -0.24, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -128}
+    returnToNeutral:
+      bodyLocalPosition: {x: 0.08, y: -0.025, z: 0}
+      bodyLocalEulerAngles: {x: 0, y: 0, z: -9}
+      leftFootLocalPosition: {x: 0.09, y: 0, z: 0}
+      leftFootLocalEulerAngles: {x: 0, y: 0, z: 7}
+      rightFootLocalPosition: {x: -0.07, y: 0, z: 0}
+      rightFootLocalEulerAngles: {x: 0, y: 0, z: -5}
+      weaponLocalPosition: {x: 0.1, y: -0.06, z: 0}
+      weaponLocalEulerAngles: {x: 0, y: 0, z: -42}
+    startupCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0.06
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.78
+        value: 0.32
+        inSlope: 1.45
+        outSlope: 1.45
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 3
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    activeCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    recoveryCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 0.05
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.25
+        value: 0.035
+        inSlope: 0.2
+        outSlope: 0.2
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.65
+        value: 0.55
+        inSlope: 1.6
+        outSlope: 1.6
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4

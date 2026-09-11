@@ -614,17 +614,45 @@ namespace Qusap
                     P(new(0.04f, 0f, 0f), new(0f, 0f, -5f), new(0.27f, 0.08f, 0f), new(0f, 0f, 28f), new(-0.03f, 0f, 0f), new(0f, 0f, -6f), Vector3.zero, Vector3.zero),
                     P(new(-0.015f, 0f, 0f), new(0f, 0f, 2f), new(0.04f, 0.01f, 0f), new(0f, 0f, 5f), Vector3.zero, Vector3.zero, Vector3.zero, Vector3.zero)),
 
-                QusapProceduralCombatMotionId.WeaponLightFirst => WeaponMotion(
-                    -0.04f, 5f, -0.04f, 0.02f, 0.03f, -0.02f,
-                    new(-0.04f, 0.03f, 0f), new(0f, 0f, 32f),
-                    new(0.10f, -0.02f, 0f), new(0f, 0f, -54f),
-                    new(0.05f, -0.01f, 0f), new(0f, 0f, -38f)),
+                QusapProceduralCombatMotionId.WeaponLightFirst => new(
+                    zero,
+                    P(new(-0.21f, 0.035f, 0f), new(0f, 0f, 26f),
+                        new(0.12f, 0.045f, 0f), new(0f, 0f, -20f),
+                        new(-0.10f, 0f, 0f), Vector3.zero,
+                        new(-0.18f, 0.18f, 0f), new(0f, 0f, 58f)),
+                    P(new(0.20f, -0.045f, 0f), new(0f, 0f, -30f),
+                        new(0.30f, 0.075f, 0f), new(0f, 0f, 30f),
+                        new(-0.10f, 0f, 0f), Vector3.zero,
+                        new(0.25f, -0.08f, 0f), new(0f, 0f, -58f)),
+                    P(new(0.24f, -0.055f, 0f), new(0f, 0f, -35f),
+                        new(0.33f, 0.025f, 0f), new(0f, 0f, 22f),
+                        new(-0.10f, 0f, 0f), Vector3.zero,
+                        new(0.32f, -0.16f, 0f), new(0f, 0f, -78f)),
+                    P(new(0.04f, -0.01f, 0f), new(0f, 0f, -6f),
+                        new(0.05f, 0f, 0f), Vector3.zero,
+                        new(-0.02f, 0f, 0f), Vector3.zero,
+                        new(0.08f, -0.03f, 0f), new(0f, 0f, -18f)),
+                    LightFirstStartupCurve(), LinearActiveCurve(), LightRecoveryCurve()),
 
-                QusapProceduralCombatMotionId.WeaponLightSecond => WeaponMotion(
-                    0.035f, -5f, 0.03f, -0.02f, -0.045f, 0.025f,
-                    new(0.05f, -0.02f, 0f), new(0f, 0f, -48f),
-                    new(0.09f, 0.08f, 0f), new(0f, 0f, 47f),
-                    new(0.04f, 0.05f, 0f), new(0f, 0f, 31f)),
+                QusapProceduralCombatMotionId.WeaponLightSecond => new(
+                    zero,
+                    P(new(0.17f, -0.045f, 0f), new(0f, 0f, -24f),
+                        new(-0.10f, 0f, 0f), Vector3.zero,
+                        new(0.12f, 0.045f, 0f), new(0f, 0f, -22f),
+                        new(0.18f, -0.10f, 0f), new(0f, 0f, -62f)),
+                    P(new(-0.13f, 0.085f, 0f), new(0f, 0f, 29f),
+                        new(-0.10f, 0f, 0f), Vector3.zero,
+                        new(0.31f, 0.10f, 0f), new(0f, 0f, 32f),
+                        new(0.30f, 0.19f, 0f), new(0f, 0f, 64f)),
+                    P(new(-0.17f, 0.11f, 0f), new(0f, 0f, 34f),
+                        new(-0.10f, 0f, 0f), Vector3.zero,
+                        new(0.34f, 0.06f, 0f), new(0f, 0f, 24f),
+                        new(0.36f, 0.25f, 0f), new(0f, 0f, 82f)),
+                    P(new(-0.03f, 0.015f, 0f), new(0f, 0f, 6f),
+                        new(-0.02f, 0f, 0f), Vector3.zero,
+                        new(0.05f, 0f, 0f), Vector3.zero,
+                        new(0.09f, 0.06f, 0f), new(0f, 0f, 20f)),
+                    LightSecondStartupCurve(), LinearActiveCurve(), LightRecoveryCurve()),
 
                 QusapProceduralCombatMotionId.WeaponStrong => WeaponMotion(
                     -0.12f, 13f, -0.08f, 0.04f, 0.08f, -0.04f,
@@ -641,16 +669,43 @@ namespace Qusap
 
                 QusapProceduralCombatMotionId.DamageBodyAttack => new QusapProceduralCombatMotion(
                     zero,
-                    P(new(-0.09f, -0.02f, 0f), new(0f, 0f, 9f), new(-0.09f, 0.05f, 0f), new(0f, 0f, -25f), new(0.07f, -0.02f, 0f), new(0f, 0f, 10f), Vector3.zero, Vector3.zero),
-                    P(new(0.11f, 0.04f, 0f), new(0f, 0f, -12f), new(0.38f, 0.16f, 0f), new(0f, 0f, 43f), new(-0.06f, 0f, 0f), new(0f, 0f, -12f), Vector3.zero, Vector3.zero),
-                    P(new(0.08f, 0.02f, 0f), new(0f, 0f, -8f), new(0.29f, 0.10f, 0f), new(0f, 0f, 31f), new(-0.04f, 0f, 0f), new(0f, 0f, -8f), Vector3.zero, Vector3.zero),
-                    P(new(-0.02f, 0f, 0f), new(0f, 0f, 3f), new(0.04f, 0.01f, 0f), new(0f, 0f, 5f), Vector3.zero, Vector3.zero, Vector3.zero, Vector3.zero)),
+                    P(new(-0.16f, -0.11f, 0f), new(0f, 0f, 18f),
+                        new(-0.10f, 0.10f, 0f), new(0f, 0f, -24f),
+                        Vector3.zero, Vector3.zero,
+                        new(-0.18f, 0.16f, 0f), new(0f, 0f, 35f)),
+                    P(new(-0.14f, 0.015f, 0f), new(0f, 0f, 28f),
+                        new(0.58f, 0.26f, 0f), new(0f, 0f, 52f),
+                        Vector3.zero, Vector3.zero,
+                        new(-0.24f, 0.26f, 0f), new(0f, 0f, 52f)),
+                    P(new(-0.17f, 0.025f, 0f), new(0f, 0f, 32f),
+                        new(0.55f, 0.23f, 0f), new(0f, 0f, 46f),
+                        Vector3.zero, Vector3.zero,
+                        new(-0.22f, 0.28f, 0f), new(0f, 0f, 62f)),
+                    P(new(-0.07f, -0.035f, 0f), new(0f, 0f, 10f),
+                        new(0.10f, 0.04f, 0f), new(0f, 0f, 10f),
+                        Vector3.zero, Vector3.zero,
+                        new(-0.10f, 0.16f, 0f), new(0f, 0f, 75f)),
+                    KickStartupCurve(), LinearActiveCurve(), KickRecoveryCurve()),
 
-                QusapProceduralCombatMotionId.DamageFinisher => WeaponMotion(
-                    -0.18f, 18f, -0.12f, 0.06f, 0.12f, -0.06f,
-                    new(-0.20f, 0.13f, 0f), new(0f, 0f, 102f),
-                    new(0.24f, -0.13f, 0f), new(0f, 0f, -92f),
-                    new(0.13f, -0.08f, 0f), new(0f, 0f, -64f)),
+                QusapProceduralCombatMotionId.DamageFinisher => new(
+                    zero,
+                    P(new(-0.31f, -0.15f, 0f), new(0f, 0f, 36f),
+                        new(-0.27f, 0f, 0f), new(0f, 0f, -18f),
+                        new(0.29f, 0f, 0f), new(0f, 0f, 16f),
+                        new(-0.28f, 0.28f, 0f), new(0f, 0f, 105f)),
+                    P(new(0.31f, -0.04f, 0f), new(0f, 0f, -39f),
+                        new(0.34f, 0f, 0f), new(0f, 0f, 12f),
+                        new(-0.25f, 0.08f, 0f), new(0f, 0f, -32f),
+                        new(0.36f, -0.20f, 0f), new(0f, 0f, -105f)),
+                    P(new(0.36f, -0.055f, 0f), new(0f, 0f, -45f),
+                        new(0.38f, 0f, 0f), new(0f, 0f, 8f),
+                        new(-0.29f, 0.045f, 0f), new(0f, 0f, -38f),
+                        new(0.43f, -0.24f, 0f), new(0f, 0f, -128f)),
+                    P(new(0.08f, -0.025f, 0f), new(0f, 0f, -9f),
+                        new(0.09f, 0f, 0f), new(0f, 0f, 7f),
+                        new(-0.07f, 0f, 0f), new(0f, 0f, -5f),
+                        new(0.10f, -0.06f, 0f), new(0f, 0f, -42f)),
+                    FinisherStartupCurve(), LinearActiveCurve(), FinisherRecoveryCurve()),
 
                 QusapProceduralCombatMotionId.DisarmFinisher => new QusapProceduralCombatMotion(
                     zero,
@@ -701,6 +756,45 @@ namespace Qusap
                         Vector3.zero, Vector3.zero, Vector3.zero, Vector3.zero,
                         weaponFollowP * 0.18f, weaponFollowR * 0.18f));
             }
+
+            AnimationCurve LightFirstStartupCurve() => new(
+                new Keyframe(0f, 0f, 0f, 0.18f),
+                new Keyframe(0.72f, 0.48f, 1.35f, 1.35f),
+                new Keyframe(1f, 1f, 2.1f, 0f));
+
+            AnimationCurve LightSecondStartupCurve() => new(
+                new Keyframe(0f, 0f, 0f, 0.3f),
+                new Keyframe(0.58f, 0.42f, 1.25f, 1.25f),
+                new Keyframe(1f, 1f, 1.75f, 0f));
+
+            AnimationCurve KickStartupCurve() => new(
+                new Keyframe(0f, 0f, 0f, 0.12f),
+                new Keyframe(0.7f, 0.38f, 1.4f, 1.4f),
+                new Keyframe(1f, 1f, 2.3f, 0f));
+
+            AnimationCurve FinisherStartupCurve() => new(
+                new Keyframe(0f, 0f, 0f, 0.06f),
+                new Keyframe(0.78f, 0.32f, 1.45f, 1.45f),
+                new Keyframe(1f, 1f, 3f, 0f));
+
+            AnimationCurve LinearActiveCurve() => AnimationCurve.Linear(0f, 0f, 1f, 1f);
+
+            AnimationCurve LightRecoveryCurve() => new(
+                new Keyframe(0f, 0f, 0f, 1.35f),
+                new Keyframe(0.62f, 0.82f, 0.8f, 0.8f),
+                new Keyframe(1f, 1f, 0.25f, 0f));
+
+            AnimationCurve KickRecoveryCurve() => new(
+                new Keyframe(0f, 0f, 0f, 1.05f),
+                new Keyframe(0.58f, 0.68f, 1.15f, 1.15f),
+                new Keyframe(1f, 1f, 0.45f, 0f));
+
+            // Retain the visual overshoot through the first quarter of recovery.
+            AnimationCurve FinisherRecoveryCurve() => new(
+                new Keyframe(0f, 0f, 0f, 0.05f),
+                new Keyframe(0.25f, 0.035f, 0.2f, 0.2f),
+                new Keyframe(0.65f, 0.55f, 1.6f, 1.6f),
+                new Keyframe(1f, 1f, 0f, 0f));
         }
 
         private static bool IsFinite(float value)

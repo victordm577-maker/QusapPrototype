@@ -460,7 +460,11 @@ namespace Qusap.Tests
         }
 
         [TestCase(QusapProceduralCombatMotionId.BodyAttack)]
+        [TestCase(QusapProceduralCombatMotionId.WeaponLightFirst)]
+        [TestCase(QusapProceduralCombatMotionId.WeaponLightSecond)]
         [TestCase(QusapProceduralCombatMotionId.WeaponStrong)]
+        [TestCase(QusapProceduralCombatMotionId.DamageBodyAttack)]
+        [TestCase(QusapProceduralCombatMotionId.DamageFinisher)]
         [TestCase(QusapProceduralCombatMotionId.DisarmFinisher)]
         [TestCase(QusapProceduralCombatMotionId.LaunchFinisher)]
         public void ChoreographyNeverChangesRigidbodyColliderOrHitbox(
@@ -495,16 +499,39 @@ namespace Qusap.Tests
             Vector3 body = player.Rig.BodyPivot.localPosition;
             Vector3 left = player.Rig.FootPivotLeft.localPosition;
             Quaternion right = player.Rig.FootPivotRight.localRotation;
+            Vector3 bodyScale = player.Rig.BodyPivot.localScale;
+            Vector3 leftScale = player.Rig.FootPivotLeft.localScale;
+            Vector3 rightScale = player.Rig.FootPivotRight.localScale;
+            Transform sword = player.Root.GetComponent<QusapEquippedWeaponPresenter>()
+                .EquippedVisual.transform;
+            Vector3 swordPosition = sword.localPosition;
+            Quaternion swordRotation = sword.localRotation;
+            Vector3 swordScale = sword.localScale;
+            QusapProceduralCombatMotionId[] damageCombo =
+            {
+                QusapProceduralCombatMotionId.WeaponLightFirst,
+                QusapProceduralCombatMotionId.WeaponLightSecond,
+                QusapProceduralCombatMotionId.DamageBodyAttack,
+                QusapProceduralCombatMotionId.DamageFinisher
+            };
             for (ulong id = 2000; id < 2100; id++)
             {
+                QusapProceduralCombatMotionId motionId =
+                    damageCombo[(int)((id - 2000) % (ulong)damageCombo.Length)];
                 player.Procedural.Present(ContextForMotion(
-                    id, QusapProceduralCombatMotionId.BodyAttack, 1));
+                    id, motionId, 1));
                 player.Procedural.CancelExecution(
                     id, QusapCombatVisualCancellationReason.Completed);
             }
             Assert.That(player.Rig.BodyPivot.localPosition, Is.EqualTo(body));
             Assert.That(player.Rig.FootPivotLeft.localPosition, Is.EqualTo(left));
             Assert.That(player.Rig.FootPivotRight.localRotation, Is.EqualTo(right));
+            Assert.That(player.Rig.BodyPivot.localScale, Is.EqualTo(bodyScale));
+            Assert.That(player.Rig.FootPivotLeft.localScale, Is.EqualTo(leftScale));
+            Assert.That(player.Rig.FootPivotRight.localScale, Is.EqualTo(rightScale));
+            Assert.That(sword.localPosition, Is.EqualTo(swordPosition));
+            Assert.That(sword.localRotation, Is.EqualTo(swordRotation));
+            Assert.That(sword.localScale, Is.EqualTo(swordScale));
         }
 
         [Test]

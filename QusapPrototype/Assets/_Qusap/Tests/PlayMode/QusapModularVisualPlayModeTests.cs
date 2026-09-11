@@ -13,8 +13,8 @@ namespace Qusap.Tests
 {
     public sealed class QusapModularVisualPlayModeTests
     {
-        private const string PreviewScenePath =
-            "Assets/_Qusap/Scenes/CombatPlayground_ModularVisualPreview.unity";
+        private const string OfficialScenePath =
+            "Assets/_Qusap/Scenes/CombatPlayground.unity";
 
         private Keyboard keyboard;
         private Gamepad gamepad;
@@ -26,7 +26,7 @@ namespace Qusap.Tests
         private float timeScaleBeforeFixture;
 
         [UnitySetUp]
-        public IEnumerator LoadPreview()
+        public IEnumerator LoadOfficialScene()
         {
             timeScaleBeforeFixture = Time.timeScale;
             Time.timeScale = 1f;
@@ -60,7 +60,7 @@ namespace Qusap.Tests
                 + CurrentInputDevices());
 
             AsyncOperation load = EditorSceneManager.LoadSceneAsyncInPlayMode(
-                PreviewScenePath,
+                OfficialScenePath,
                 new LoadSceneParameters(LoadSceneMode.Single));
             while (!load.isDone)
                 yield return null;
@@ -70,7 +70,7 @@ namespace Qusap.Tests
         }
 
         [UnityTearDown]
-        public IEnumerator UnloadPreview()
+        public IEnumerator UnloadOfficialScene()
         {
             Time.timeScale = 1f;
             if (keyboard != null && keyboard.added)
@@ -118,7 +118,7 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void PreviewContainsTwoVisibleModularPlayersAndNoActiveLegacyVisual()
+        public void OfficialSceneContainsTwoVisibleModularPlayersAndNoActiveLegacyVisual()
         {
             PlayerView[] players = Players();
             Assert.That(players, Has.Length.EqualTo(2));
@@ -132,6 +132,10 @@ namespace Qusap.Tests
                 Assert.That(player.Root.transform.Find("PlayerVisual_v1_Backup").gameObject.activeInHierarchy, Is.False);
                 Assert.That(player.Root.GetComponentsInChildren<QusapModularVisualRig>(false),
                     Has.Length.EqualTo(1));
+                Assert.That(player.Root.GetComponentsInChildren<Animator>(false), Is.Empty);
+                Assert.That(player.Root.GetComponentsInChildren<QusapModularCombatVisualPresenter>(false),
+                    Has.Length.EqualTo(1));
+                Assert.That(player.Rig.GetComponentsInChildren<Renderer>(false), Has.Length.EqualTo(3));
             }
         }
 

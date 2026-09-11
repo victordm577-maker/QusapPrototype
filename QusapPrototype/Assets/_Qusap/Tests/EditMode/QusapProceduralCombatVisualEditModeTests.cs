@@ -8,8 +8,8 @@ namespace Qusap.Tests
 {
     public sealed class QusapProceduralCombatVisualEditModeTests
     {
-        private const string VariantPath =
-            "Assets/_Qusap/Prefabs/Characters/QusapCombatPlayer_ModularVisual.prefab";
+        private const string OfficialPrefabPath =
+            "Assets/_Qusap/Prefabs/QusapCombatPlayer.prefab";
         private const string DefaultProfilePath =
             "Assets/_Qusap/Settings/CombatVisuals/QusapModularProceduralCombatVisualProfile.asset";
         private QusapProceduralCombatVisualProfile profile;
@@ -278,9 +278,9 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void VariantDefinesOneWriterForEachCombatTransform()
+        public void OfficialPrefabDefinesOneWriterForEachCombatTransform()
         {
-            GameObject root = PrefabUtility.LoadPrefabContents(VariantPath);
+            GameObject root = PrefabUtility.LoadPrefabContents(OfficialPrefabPath);
             try
             {
                 Assert.That(root.GetComponents<QusapModularCombatVisualPresenter>(), Has.Length.EqualTo(1));

@@ -371,6 +371,11 @@ namespace Qusap.EditorTools
                 return false;
             }
 
+            if (IsPromotedCombatPlayerPrefabComplete(player))
+            {
+                return true;
+            }
+
             Transform visual = player.transform.Find("PlayerVisual");
             Animator animator = visual != null ? visual.GetComponent<Animator>() : null;
             QusapHitReactionVisual hitReaction = player.GetComponent<QusapHitReactionVisual>();
@@ -387,6 +392,108 @@ namespace Qusap.EditorTools
 
             SerializedObject serializedReaction = new(hitReaction);
             return serializedReaction.FindProperty("playerVisual").objectReferenceValue == visual;
+        }
+
+        private static bool IsPromotedCombatPlayerPrefabComplete(GameObject player)
+        {
+            Transform legacyVisual = player.transform.Find("PlayerVisual");
+            Transform backupVisual = player.transform.Find("PlayerVisual_v1_Backup");
+            Transform alignment = player.transform.Find("PlayerVisual_ModularAlignment");
+            Transform facingPivot = alignment != null
+                ? alignment.Find("ModularFacingPivot")
+                : null;
+            Transform capturePivot = facingPivot != null
+                ? facingPivot.Find("CombatFacingCapturePivot")
+                : null;
+            Transform socket = player.transform.Find("WeaponSocket");
+
+            QusapCombatController combat = player.GetComponent<QusapCombatController>();
+            QusapAnimationDriver animationDriver = player.GetComponent<QusapAnimationDriver>();
+            QusapHitReactionVisual hitReaction = player.GetComponent<QusapHitReactionVisual>();
+            QusapWeaponEquipment equipment = player.GetComponent<QusapWeaponEquipment>();
+            QusapEquippedWeaponPresenter equippedPresenter =
+                player.GetComponent<QusapEquippedWeaponPresenter>();
+            QusapWeaponAttackVisualPresenter legacyWeaponPresenter =
+                player.GetComponent<QusapWeaponAttackVisualPresenter>();
+            QusapModularFacingPresenter facingPresenter =
+                player.GetComponent<QusapModularFacingPresenter>();
+            QusapModularCombatVisualPresenter combatVisualPresenter =
+                player.GetComponent<QusapModularCombatVisualPresenter>();
+            QusapModularVisualRig[] rigs = player.GetComponentsInChildren<QusapModularVisualRig>(true);
+
+            if (legacyVisual == null
+                || legacyVisual.gameObject.activeSelf
+                || backupVisual == null
+                || backupVisual.gameObject.activeSelf
+                || alignment == null
+                || !alignment.gameObject.activeSelf
+                || facingPivot == null
+                || capturePivot == null
+                || socket == null
+                || !socket.gameObject.activeSelf
+                || socket.parent != player.transform
+                || combat == null
+                || animationDriver == null
+                || animationDriver.enabled
+                || hitReaction == null
+                || equipment == null
+                || equippedPresenter == null
+                || legacyWeaponPresenter == null
+                || legacyWeaponPresenter.enabled
+                || facingPresenter == null
+                || !facingPresenter.enabled
+                || combatVisualPresenter == null
+                || !combatVisualPresenter.enabled
+                || rigs.Length != 1
+                || player.GetComponents<QusapWeaponEquipment>().Length != 1
+                || player.GetComponents<QusapEquippedWeaponPresenter>().Length != 1
+                || player.GetComponents<QusapWeaponAttackVisualPresenter>().Length != 1
+                || player.GetComponents<QusapModularFacingPresenter>().Length != 1
+                || player.GetComponents<QusapModularCombatVisualPresenter>().Length != 1
+                || equippedPresenter.Equipment != equipment
+                || equippedPresenter.CombatController != combat
+                || equippedPresenter.Catalog == null
+                || equippedPresenter.WeaponSocket != socket
+                || facingPresenter.CombatController != combat
+                || facingPresenter.OrientationPivot != facingPivot
+                || combatVisualPresenter.CombatController != combat
+                || combatVisualPresenter.ModularRig != rigs[0]
+                || combatVisualPresenter.Profile == null
+                || combatVisualPresenter.CombatFacingCapturePivot != capturePivot)
+            {
+                return false;
+            }
+
+            int socketCount = 0;
+            int enabledRendererCount = 0;
+            foreach (Transform candidate in player.GetComponentsInChildren<Transform>(true))
+            {
+                if (candidate.name == "WeaponSocket")
+                {
+                    socketCount++;
+                }
+            }
+
+            foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(false))
+            {
+                if (renderer.enabled)
+                {
+                    enabledRendererCount++;
+                }
+            }
+
+            SerializedObject serializedReaction = new(hitReaction);
+            SerializedProperty reactionRenderers = serializedReaction.FindProperty("renderers");
+            SerializedObject serializedCombatVisual = new(combatVisualPresenter);
+            return socketCount == 1
+                && enabledRendererCount == 3
+                && serializedReaction.FindProperty("playerVisual").objectReferenceValue == alignment
+                && reactionRenderers != null
+                && reactionRenderers.arraySize == 3
+                && serializedCombatVisual.FindProperty("equippedWeaponPresenter").objectReferenceValue
+                    == equippedPresenter
+                && serializedCombatVisual.FindProperty("legacyWeaponPresenter").objectReferenceValue
+                    == legacyWeaponPresenter;
         }
 
         private static bool IsOneWayPlatformPrefabComplete()

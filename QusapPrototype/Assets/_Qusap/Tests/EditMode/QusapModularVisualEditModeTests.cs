@@ -24,6 +24,8 @@ namespace Qusap.Tests
             "Assets/_Qusap/Art/Characters/Materials/M_Qusap_Light_Modular_URP.mat";
         private const string VisualPrefabPath =
             "Assets/_Qusap/Prefabs/Characters/QusapLuzModularVisual.prefab";
+        private const string OfficialPlayerPrefabPath =
+            "Assets/_Qusap/Prefabs/QusapCombatPlayer.prefab";
         private const string PlayerVariantPath =
             "Assets/_Qusap/Prefabs/Characters/QusapCombatPlayer_ModularVisual.prefab";
 
@@ -216,62 +218,82 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void PlayerVariantInheritsCanonicalLogicWithoutDuplicates()
+        public void OfficialPlayerAndVariantContainCanonicalLogicWithoutDuplicates()
         {
+            Assert.That(PrefabUtility.GetPrefabAssetType(
+                AssetDatabase.LoadAssetAtPath<GameObject>(OfficialPlayerPrefabPath)),
+                Is.EqualTo(PrefabAssetType.Regular));
             Assert.That(PrefabUtility.GetPrefabAssetType(
                 AssetDatabase.LoadAssetAtPath<GameObject>(PlayerVariantPath)),
                 Is.EqualTo(PrefabAssetType.Variant));
-            WithPrefab(PlayerVariantPath, root =>
-            {
-                AssertSingleComponent<Rigidbody>(root);
-                AssertSingleComponent<CapsuleCollider>(root);
-                AssertSingleComponent<QusapInputReader>(root);
-                AssertSingleComponent<QusapHorizontalMotor>(root);
-                AssertSingleComponent<QusapVerticalMotor>(root);
-                AssertSingleComponent<QusapDashMotor>(root);
-                AssertSingleComponent<QusapCombatController>(root);
-                AssertSingleComponent<QusapHitReceiver>(root);
-                AssertSingleComponent<QusapHurtbox>(root);
-                AssertSingleComponent<QusapAttackHitbox>(root);
-                AssertSingleComponent<QusapWeaponEquipment>(root);
-                AssertSingleComponent<QusapEquippedWeaponPresenter>(root);
-                AssertSingleComponent<QusapWeaponAttackVisualPresenter>(root);
-                AssertSingleComponent<QusapModularCombatVisualPresenter>(root);
-                AssertSingleComponent<QusapModularVisualRig>(root);
-                AssertSingleComponent<QusapModularFacingPresenter>(root);
-            });
+            WithPrefab(OfficialPlayerPrefabPath, AssertCanonicalComponents);
+            WithPrefab(PlayerVariantPath, AssertCanonicalComponents);
+
+            string variantYaml = File.ReadAllText(PlayerVariantPath);
+            Assert.That(variantYaml, Does.Not.Contain(" stripped"));
+            Assert.That(variantYaml, Does.Not.Contain("addedObject:"));
         }
 
         [Test]
-        public void VariantUsesSeparatedAlignedVisualAndSingleWeaponSocket()
+        public void OfficialPlayerAndVariantUseSeparatedVisualAndSingleWeaponSocket()
         {
-            WithPrefab(PlayerVariantPath, root =>
-            {
-                Transform oldVisual = root.transform.Find("PlayerVisual");
-                Transform backupVisual = root.transform.Find("PlayerVisual_v1_Backup");
-                Assert.That(oldVisual, Is.Not.Null);
-                Assert.That(oldVisual.gameObject.activeSelf, Is.False);
-                Assert.That(backupVisual, Is.Not.Null);
-                Assert.That(backupVisual.gameObject.activeSelf, Is.False);
+            WithPrefab(OfficialPlayerPrefabPath, AssertPromotedVisual);
+            WithPrefab(PlayerVariantPath, AssertPromotedVisual);
+        }
 
-                Transform alignment = root.transform.Find("PlayerVisual_ModularAlignment");
-                Assert.That(alignment, Is.Not.Null);
-                Assert.That(alignment.localPosition, Is.EqualTo(new Vector3(0f, -1f, 0f)));
-                Assert.That(alignment.localScale, Is.EqualTo(Vector3.one));
-                Transform facingPivot = alignment.Find("ModularFacingPivot");
-                Assert.That(facingPivot, Is.Not.Null);
-                Assert.That(facingPivot.localScale, Is.EqualTo(Vector3.one));
-                Transform capturePivot = facingPivot.Find("CombatFacingCapturePivot");
-                Assert.That(capturePivot, Is.Not.Null);
-                Assert.That(capturePivot.localScale, Is.EqualTo(Vector3.one));
-                Assert.That(capturePivot.GetComponentInChildren<QusapModularVisualRig>(true), Is.Not.Null);
+        private static void AssertCanonicalComponents(GameObject root)
+        {
+            AssertSingleComponent<Rigidbody>(root);
+            AssertSingleComponent<CapsuleCollider>(root);
+            AssertSingleComponent<QusapInputReader>(root);
+            AssertSingleComponent<QusapHorizontalMotor>(root);
+            AssertSingleComponent<QusapVerticalMotor>(root);
+            AssertSingleComponent<QusapDashMotor>(root);
+            AssertSingleComponent<QusapCombatController>(root);
+            AssertSingleComponent<QusapHitReceiver>(root);
+            AssertSingleComponent<QusapHurtbox>(root);
+            AssertSingleComponent<QusapAttackHitbox>(root);
+            AssertSingleComponent<QusapWeaponEquipment>(root);
+            AssertSingleComponent<QusapEquippedWeaponPresenter>(root);
+            AssertSingleComponent<QusapWeaponAttackVisualPresenter>(root);
+            AssertSingleComponent<QusapModularCombatVisualPresenter>(root);
+            AssertSingleComponent<QusapModularVisualRig>(root);
+            AssertSingleComponent<QusapModularFacingPresenter>(root);
+        }
 
-                Transform[] sockets = root.GetComponentsInChildren<Transform>(true)
-                    .Where(item => item.name == "WeaponSocket").ToArray();
-                Assert.That(sockets, Has.Length.EqualTo(1));
-                Assert.That(sockets[0].gameObject.activeInHierarchy, Is.True);
-                Assert.That(root.GetComponent<QusapAnimationDriver>().enabled, Is.False);
-            });
+        private static void AssertPromotedVisual(GameObject root)
+        {
+            Transform oldVisual = root.transform.Find("PlayerVisual");
+            Transform backupVisual = root.transform.Find("PlayerVisual_v1_Backup");
+            Assert.That(oldVisual, Is.Not.Null);
+            Assert.That(oldVisual.gameObject.activeSelf, Is.False);
+            Assert.That(backupVisual, Is.Not.Null);
+            Assert.That(backupVisual.gameObject.activeSelf, Is.False);
+
+            Transform alignment = root.transform.Find("PlayerVisual_ModularAlignment");
+            Assert.That(alignment, Is.Not.Null);
+            Assert.That(alignment.localPosition, Is.EqualTo(new Vector3(0f, -1f, 0f)));
+            Assert.That(alignment.localScale, Is.EqualTo(Vector3.one));
+            Transform facingPivot = alignment.Find("ModularFacingPivot");
+            Assert.That(facingPivot, Is.Not.Null);
+            Assert.That(facingPivot.localScale, Is.EqualTo(Vector3.one));
+            Transform capturePivot = facingPivot.Find("CombatFacingCapturePivot");
+            Assert.That(capturePivot, Is.Not.Null);
+            Assert.That(capturePivot.localScale, Is.EqualTo(Vector3.one));
+            Assert.That(capturePivot.GetComponentInChildren<QusapModularVisualRig>(true), Is.Not.Null);
+
+            Transform[] sockets = root.GetComponentsInChildren<Transform>(true)
+                .Where(item => item.name == "WeaponSocket").ToArray();
+            Assert.That(sockets, Has.Length.EqualTo(1));
+            Assert.That(sockets[0].gameObject.activeInHierarchy, Is.True);
+            Assert.That(root.GetComponent<QusapAnimationDriver>().enabled, Is.False);
+            Assert.That(root.GetComponent<QusapWeaponAttackVisualPresenter>().enabled, Is.False);
+            Assert.That(root.GetComponent<QusapModularCombatVisualPresenter>().enabled, Is.True);
+            Assert.That(root.GetComponentsInChildren<QusapModularCombatVisualPresenter>(false),
+                Has.Length.EqualTo(1));
+            Assert.That(root.GetComponentsInChildren<Animator>(false), Is.Empty);
+            Assert.That(root.GetComponentsInChildren<Renderer>(false)
+                .Count(renderer => renderer.enabled), Is.EqualTo(3));
         }
 
         private static void AssertSingleComponent<T>(GameObject root) where T : Component

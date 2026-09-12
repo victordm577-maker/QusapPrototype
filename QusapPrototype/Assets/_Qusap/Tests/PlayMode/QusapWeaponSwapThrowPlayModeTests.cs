@@ -537,12 +537,10 @@ namespace Qusap.Tests
             bootstrap.PlayerTwoEquipment.GetComponent<Rigidbody>().position =
                 white.transform.position;
 
-            InputSystem.QueueDeltaStateEvent(gamepad.rightTrigger, 0f);
-            InputSystem.Update();
             try
             {
-                InputSystem.QueueDeltaStateEvent(gamepad.rightTrigger, 1f);
-                InputSystem.Update();
+                QueueRightTriggerState(gamepad, false);
+                QueueRightTriggerState(gamepad, true);
                 Assert.That(
                     bootstrap.PlayerTwoEquipment.GetComponent<QusapInputReader>()
                         .HasPendingWeaponSwapThrow,
@@ -557,12 +555,17 @@ namespace Qusap.Tests
             {
                 if (gamepad.added)
                 {
-                    InputSystem.QueueDeltaStateEvent(gamepad.rightTrigger, 0f);
-                    InputSystem.Update();
-                    if (ownsGamepad)
+                    try
                     {
-                        InputSystem.RemoveDevice(gamepad);
-                        addedInputDevices.Remove(gamepad);
+                        QueueRightTriggerState(gamepad, false);
+                    }
+                    finally
+                    {
+                        if (ownsGamepad)
+                        {
+                            InputSystem.RemoveDevice(gamepad);
+                            addedInputDevices.Remove(gamepad);
+                        }
                     }
                 }
             }
@@ -570,6 +573,33 @@ namespace Qusap.Tests
             yield return null;
             Assert.Ignore("Authoritative gamepad integration requires the Unity Editor.");
 #endif
+        }
+
+        private static void QueueRightTriggerState(Gamepad gamepad, bool pressed)
+        {
+            InputStateBlock stateBlock = gamepad.rightTrigger.stateBlock;
+            if (stateBlock.format == InputStateBlock.FormatByte
+                && stateBlock.sizeInBits == 8)
+            {
+                InputSystem.QueueDeltaStateEvent(
+                    gamepad.rightTrigger,
+                    pressed ? byte.MaxValue : byte.MinValue);
+            }
+            else if (stateBlock.format == InputStateBlock.FormatFloat
+                && stateBlock.sizeInBits == 32)
+            {
+                InputSystem.QueueDeltaStateEvent(
+                    gamepad.rightTrigger,
+                    pressed ? 1f : 0f);
+            }
+            else
+            {
+                Assert.Fail(
+                    $"Unsupported right trigger state block on '{gamepad.layout}': "
+                    + $"format '{stateBlock.format}', size {stateBlock.sizeInBits} bits.");
+            }
+
+            InputSystem.Update();
         }
 
         private bool Swap(

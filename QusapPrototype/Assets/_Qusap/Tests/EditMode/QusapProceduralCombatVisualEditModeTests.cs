@@ -262,7 +262,7 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void DamageArtPassCurvesAreDistinctFiniteAndClamped()
+        public void AuthoredArtPassCurvesAreDistinctFiniteAndClamped()
         {
             QusapProceduralCombatMotion first = profile.GetMotion(
                 QusapProceduralCombatMotionId.WeaponLightFirst);
@@ -270,17 +270,27 @@ namespace Qusap.Tests
                 QusapProceduralCombatMotionId.WeaponLightSecond);
             QusapProceduralCombatMotion finisher = profile.GetMotion(
                 QusapProceduralCombatMotionId.DamageFinisher);
+            QusapProceduralCombatMotion headbutt = profile.GetMotion(
+                QusapProceduralCombatMotionId.Headbutt);
+            QusapProceduralCombatMotion disarm = profile.GetMotion(
+                QusapProceduralCombatMotionId.DisarmFinisher);
 
             Assert.That(Mathf.Abs(first.StartupCurve.Evaluate(0.72f)
                 - second.StartupCurve.Evaluate(0.72f)), Is.GreaterThan(0.01f));
             Assert.That(finisher.StartupCurve.Evaluate(0.5f),
                 Is.LessThan(first.StartupCurve.Evaluate(0.5f)));
+            Assert.That(disarm.StartupCurve.Evaluate(0.5f),
+                Is.LessThan(headbutt.StartupCurve.Evaluate(0.5f)));
+            Assert.That(disarm.RecoveryCurve.Evaluate(0.25f),
+                Is.LessThan(headbutt.RecoveryCurve.Evaluate(0.25f)));
             foreach (QusapProceduralCombatMotionId id in new[]
             {
                 QusapProceduralCombatMotionId.WeaponLightFirst,
                 QusapProceduralCombatMotionId.WeaponLightSecond,
                 QusapProceduralCombatMotionId.DamageBodyAttack,
-                QusapProceduralCombatMotionId.DamageFinisher
+                QusapProceduralCombatMotionId.DamageFinisher,
+                QusapProceduralCombatMotionId.Headbutt,
+                QusapProceduralCombatMotionId.DisarmFinisher
             })
             {
                 QusapProceduralCombatMotion motion = profile.GetMotion(id);
@@ -298,7 +308,7 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void EveryDamageComboPoseMirrorsFromCapturedFacingWithoutScaleInversion()
+        public void EveryAuthoredArtPassPoseMirrorsFromCapturedFacingWithoutScaleInversion()
         {
             foreach ((QusapCombatCommand command, QusapComboId? combo, int step,
                 bool finisher) in new[]
@@ -306,7 +316,9 @@ namespace Qusap.Tests
                 (QusapCombatCommand.WeaponLight, (QusapComboId?)null, 0, false),
                 (QusapCombatCommand.WeaponLight, (QusapComboId?)null, 1, false),
                 (QusapCombatCommand.BodyAttack, (QusapComboId?)QusapComboId.Damage, 2, false),
-                (QusapCombatCommand.WeaponStrong, (QusapComboId?)QusapComboId.Damage, 3, true)
+                (QusapCombatCommand.WeaponStrong, (QusapComboId?)QusapComboId.Damage, 3, true),
+                (QusapCombatCommand.Headbutt, (QusapComboId?)null, -1, false),
+                (QusapCombatCommand.Headbutt, (QusapComboId?)QusapComboId.Disarm, 2, true)
             })
             {
                 var rightContext = new QusapCombatVisualContext(
@@ -330,7 +342,7 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void AssignedProfileSerializesDamageArtPassInsteadOfDependingOnFallbacks()
+        public void AssignedProfileSerializesApprovedArtPassesInsteadOfDependingOnFallbacks()
         {
             QusapProceduralCombatVisualProfile assigned =
                 AssetDatabase.LoadAssetAtPath<QusapProceduralCombatVisualProfile>(
@@ -351,17 +363,57 @@ namespace Qusap.Tests
                 .FindPropertyRelative("preparation")
                 .FindPropertyRelative("weaponLocalEulerAngles").vector3Value.z,
                 Is.EqualTo(105f));
+            Assert.That(serialized.FindProperty("headbutt")
+                .FindPropertyRelative("impact")
+                .FindPropertyRelative("bodyLocalPosition").vector3Value.x,
+                Is.EqualTo(0.36f));
+            Assert.That(serialized.FindProperty("disarmFinisher")
+                .FindPropertyRelative("followThrough")
+                .FindPropertyRelative("bodyLocalPosition").vector3Value.x,
+                Is.EqualTo(0.60f));
         }
 
         [Test]
-        public void OutOfScopeAttackChoreographiesKeepTheirPreviousAuthoredValues()
+        public void DisarmArtPassAuthorsDistinctHeadbuttsAndKeepsOtherDefaults()
         {
+            QusapProceduralCombatMotion headbutt = profile.GetMotion(
+                QusapProceduralCombatMotionId.Headbutt);
+            QusapProceduralCombatMotion disarm = profile.GetMotion(
+                QusapProceduralCombatMotionId.DisarmFinisher);
+
+            Assert.That(headbutt.Preparation.BodyLocalPosition.y, Is.LessThan(-0.05f));
+            Assert.That(headbutt.Impact.BodyLocalPosition.x, Is.EqualTo(0.36f));
+            Assert.That(headbutt.FollowThrough.BodyLocalPosition.x,
+                Is.GreaterThan(headbutt.Impact.BodyLocalPosition.x));
+            Assert.That(headbutt.Impact.RightFootLocalPosition.magnitude,
+                Is.LessThan(0.08f));
+            Assert.That(headbutt.Preparation.WeaponLocalPosition.y, Is.GreaterThan(0.15f));
+            Assert.That(Mathf.Abs(headbutt.Impact.WeaponLocalEulerAngles.z
+                - headbutt.Preparation.WeaponLocalEulerAngles.z), Is.LessThan(10f));
+
+            Assert.That(disarm.Preparation.BodyLocalPosition.y, Is.LessThan(-0.12f));
+            Assert.That(disarm.Preparation.RightFootLocalPosition.x
+                - disarm.Preparation.LeftFootLocalPosition.x, Is.GreaterThan(0.5f));
+            Assert.That(disarm.Impact.BodyLocalPosition.x,
+                Is.GreaterThan(headbutt.Impact.BodyLocalPosition.x + 0.1f));
+            Assert.That(disarm.FollowThrough.BodyLocalPosition.x,
+                Is.GreaterThan(disarm.Impact.BodyLocalPosition.x));
+            Assert.That(disarm.Impact.LeftFootLocalPosition.x, Is.GreaterThan(0.3f));
+            Assert.That(disarm.Impact.LeftFootLocalPosition.y, Is.LessThan(0.05f));
+            Assert.That(disarm.Impact.RightFootLocalPosition.magnitude,
+                Is.LessThan(0.08f));
+            Assert.That(disarm.Preparation.WeaponLocalPosition.x, Is.LessThan(-0.25f));
+            Assert.That(disarm.Impact.WeaponLocalPosition.x, Is.LessThan(0f));
+            Assert.That(disarm.FollowThrough.WeaponLocalPosition.x, Is.LessThan(0f));
+            Assert.That(Mathf.Abs(disarm.FollowThrough.WeaponLocalEulerAngles.z
+                - disarm.Preparation.WeaponLocalEulerAngles.z), Is.LessThan(15f));
+            Assert.That(headbutt.Evaluate(QusapAttackPhase.Recovery, 1f).BodyLocalPosition,
+                Is.EqualTo(headbutt.Neutral.BodyLocalPosition));
+            Assert.That(disarm.Evaluate(QusapAttackPhase.Recovery, 1f).BodyLocalPosition,
+                Is.EqualTo(disarm.Neutral.BodyLocalPosition));
+
             Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.WeaponStrong)
                 .Preparation.WeaponLocalEulerAngles.z, Is.EqualTo(78f));
-            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.Headbutt)
-                .Impact.BodyLocalPosition.x, Is.EqualTo(0.29f));
-            Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.DisarmFinisher)
-                .Impact.BodyLocalPosition.x, Is.EqualTo(0.36f));
             Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.LaunchWeaponLight)
                 .Impact.WeaponLocalEulerAngles.z, Is.EqualTo(58f));
             Assert.That(profile.GetMotion(QusapProceduralCombatMotionId.LaunchFinisher)

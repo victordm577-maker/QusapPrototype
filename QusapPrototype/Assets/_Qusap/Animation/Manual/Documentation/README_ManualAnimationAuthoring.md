@@ -17,12 +17,14 @@ No añadir curvas de Scale ni curvas para `AnimationRoot`. El clip neutral inclu
 ```text
 QusapManualAnimationRig  [Animator; Apply Root Motion = false]
 └── AnimationRoot       [no animar]
-    ├── ModelSpace      [conversión uniforme del FBX; no animar]
-    │   ├── BodyPivot
-    │   │   └── Body
-    │   ├── FootPivot_L
-    │   │   └── FloatingFoot_L
-    │   └── FootPivot_R
+    ├── BodyPivot       [animable; ejes Unity; escala 1]
+    │   └── BodyModelSpace [corrección del FBX; no animar]
+    │       └── Body
+    ├── FootPivot_L     [animable; ejes Unity; escala 1]
+    │   └── FootLModelSpace [corrección del FBX; no animar]
+    │       └── FloatingFoot_L
+    ├── FootPivot_R     [animable; ejes Unity; escala 1]
+    │   └── FootRModelSpace [corrección del FBX; no animar]
     │       └── FloatingFoot_R
     └── WeaponSocket
         └── QusapSwordBlueVisual  [prefab anidado; espada y mano rígidas]
@@ -34,26 +36,27 @@ QusapManualAnimationRig  [Animator; Apply Root Motion = false]
 
 El clip contiene Local Position (x, y, z) y Local Rotation quaternion (x, y, z, w) en estas cuatro rutas exactas:
 
-- `AnimationRoot/ModelSpace/BodyPivot`
-- `AnimationRoot/ModelSpace/FootPivot_L`
-- `AnimationRoot/ModelSpace/FootPivot_R`
+- `AnimationRoot/BodyPivot`
+- `AnimationRoot/FootPivot_L`
+- `AnimationRoot/FootPivot_R`
 - `AnimationRoot/WeaponSocket`
 
-No hay bindings bajo el hijo de `WeaponSocket`. Por eso el prefab azul puede sustituirse por `QusapSwordPurpleVisual.prefab` o `QusapSwordWhiteVisual.prefab` sin invalidar clips.
+No hay bindings bajo ningún nodo `ModelSpace` ni bajo el hijo de `WeaponSocket`. Por eso el prefab azul puede sustituirse por `QusapSwordPurpleVisual.prefab` o `QusapSwordWhiteVisual.prefab` sin invalidar clips.
 
 ## Pivotes inspeccionados
 
-Valores locales del modelo modular actual, preservados en el rig de autoría:
+Los controles ya están expresados en unidades y ejes normales de Unity. La orientación 2.5D que antes estaba en el prefab de escena se incorporó en los descendientes correctivos para que la pose mundial no cambie:
 
 | Control | Local Position | Local Rotation | Local Scale |
 | --- | --- | --- | --- |
-| BodyPivot | (-0.0000034422342, 0.0000046346613, 0.01128741) | (0, 0, 0, 1) | (1, 1, 1) |
-| FootPivot_L | (-0.0023739683, 0.000597857, 0.003917471) | (0, 0, 0, 1) | (1, 1, 1) |
-| FootPivot_R | (0.002369882, 0.00060223666, 0.00391639) | (0, 0, 0, 1) | (1, 1, 1) |
+| BodyPivot | aproximadamente (-0.00089, 1.12874, -0.00012) | (0, 0, 0, 1) | (1, 1, 1) |
+| FootPivot_L | aproximadamente (-0.17079, 0.39175, 0.17551) | (0, 0, 0, 1) | (1, 1, 1) |
+| FootPivot_R | aproximadamente (0.06597, 0.39164, -0.23554) | (0, 0, 0, 1) | (1, 1, 1) |
+| WeaponSocket | aproximadamente (0.27189, 1.25, -1.17093) | (0, 0, 0, 1) | (1, 1, 1) |
 
-`ModelSpace` conserva la conversión del FBX: posición local (0, 0, -0.00036484003), rotación quaternion (-0.7071068, 0, 0, 0.7071067) y escala uniforme (100, 100, 100).
+`AnimationRoot`, el prefab raíz y todos los controles animables tienen rotación identidad y escala 1. Las rotaciones de importación y la escala uniforme 100 están únicamente en `BodyModelSpace`, `FootLModelSpace` y `FootRModelSpace`, que son descendientes no animables.
 
-En producción, `WeaponSocket` parte de posición (0, 0, 0), rotación identidad y escala (1, 1, 1). `QusapEquippedWeaponPresenter` lo escribe en `LateUpdate` con offset (1.15, 0.25, -0.35) y rotación Z de -12 grados para facing derecho; además aplica escala uniforme 0.70 al prefab visual. En el rig aislado, `WeaponSocket` usa (1.15, 1.25, -0.35), compensando el desplazamiento Y=-1 del visual modular en el prefab de producción. El prefab de espada conserva posición/rotación local neutras y escala uniforme 0.70. Su `VisualPivot` conserva la conversión rígida del FBX (-90 grados en X, escala uniforme 100).
+En producción, `QusapEquippedWeaponPresenter` escribe el socket con offset (1.15, 0.25, -0.35) y rotación Z de -12 grados. En el rig aislado, el control `WeaponSocket` permanece con rotación identidad; la orientación visual preexistente se conserva en el prefab hijo. La espada mantiene escala uniforme 0.70 y su `VisualPivot` conserva la conversión rígida del FBX. Así, mover Local X/Y/Z del socket corresponde directamente a los ejes mundiales de Unity.
 
 ## Sustituir el arma temporal
 
@@ -62,7 +65,7 @@ En Prefab Mode, sustituir únicamente el hijo de `WeaponSocket` por uno de estos
 - `Assets/_Qusap/Prefabs/Weapons/QusapSwordPurpleVisual.prefab`
 - `Assets/_Qusap/Prefabs/Weapons/QusapSwordWhiteVisual.prefab`
 
-Dejar el nuevo hijo en Local Position (0, 0, 0), Local Rotation (0, 0, 0) y escala uniforme (0.70, 0.70, 0.70). La espada y la mano pertenecen al mismo visual rígido; no separar la malla ni crear otra mano.
+Para conservar la pose neutral exacta, copiar del hijo azul actual Local Position, Local Rotation y Local Scale al nuevo prefab. La corrección visual está en el hijo, nunca en `WeaponSocket`. La espada y la mano pertenecen al mismo visual rígido; no separar la malla ni crear otra mano.
 
 ## Escritores de transforms detectados en producción
 
@@ -76,4 +79,4 @@ Ninguno de esos componentes existe en `QusapManualAnimationRig`. El único compo
 
 ## Validación
 
-Usar **Qusap > Manual Animation > Validate Authoring Workspace**. La validación comprueba los bindings, 60 FPS, ausencia de Scale y de curvas en `AnimationRoot`, referencias a las mallas actuales, inventario de componentes, arma azul anidada, compatibilidad rígida de las tres espadas, cámara/luz/suelo de la escena y exclusión de Build Settings.
+Usar **Qusap > Manual Animation > Validate Authoring Workspace**. La validación comprueba los bindings, frames 0/60 a 60 FPS, ausencia de Scale y de curvas sobre `AnimationRoot` o `ModelSpace`, identidad de controles y ancestros, correspondencia Local Y/mundo Y y Local X/mundo X, matrices mundiales y materiales frente a la pose anterior, referencias a las mallas actuales, inventario de componentes, arma azul completa, compatibilidad de las tres espadas, cámara/luz/suelo y exclusión de Build Settings.

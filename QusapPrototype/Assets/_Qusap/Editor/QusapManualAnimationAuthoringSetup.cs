@@ -33,22 +33,36 @@ namespace Qusap.Editor
 
         private const string RootName = "QusapManualAnimationRig";
         private const string AnimationRootName = "AnimationRoot";
-        private const string ModelSpaceName = "ModelSpace";
         private const string BodyPivotName = "BodyPivot";
+        private const string BodyModelSpaceName = "BodyModelSpace";
         private const string LeftFootPivotName = "FootPivot_L";
+        private const string LeftFootModelSpaceName = "FootLModelSpace";
         private const string RightFootPivotName = "FootPivot_R";
+        private const string RightFootModelSpaceName = "FootRModelSpace";
         private const string WeaponSocketName = "WeaponSocket";
+        private const float MatrixTolerance = 0.0001f;
+        private static readonly Quaternion AuthoringFacingRotation = Quaternion.Euler(0f, 60f, 0f);
 
-        [MenuItem("Qusap/Manual Animation/Create Authoring Workspace")]
+        [MenuItem("Qusap/Manual Animation/Rebuild Authoring Workspace")]
         public static void BuildAll()
         {
-            EnsureTargetsDoNotExist();
             EnsureFolders();
+
+            GameObject existingRig = AssetDatabase.LoadAssetAtPath<GameObject>(RigPrefabPath);
+            bool hasLegacyHierarchy = existingRig != null
+                && existingRig.transform.Find(AnimationRootName + "/ModelSpace") != null;
+            AppearanceSnapshot before = hasLegacyHierarchy
+                && AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) != null
+                ? CaptureSceneRigAppearance()
+                : null;
 
             AnimationClip clip = BuildNeutralClip();
             AnimatorController controller = BuildController(clip);
             GameObject rigPrefab = BuildRigPrefab(controller, clip);
             BuildAuthoringScene(rigPrefab);
+
+            if (before != null)
+                CompareAppearance(before, CaptureSceneRigAppearance(), "before/after refactor");
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -72,17 +86,8 @@ namespace Qusap.Editor
             ValidateScene();
             ValidateBuildSettings();
             ValidateWeaponPrefabs();
+            ValidateAppearanceAgainstSources(rig);
             Debug.Log("QUSAP_MANUAL_AUTHORING_VALIDATION_OK");
-        }
-
-        private static void EnsureTargetsDoNotExist()
-        {
-            string[] targets = { ClipPath, ControllerPath, RigPrefabPath, ScenePath };
-            foreach (string target in targets)
-            {
-                if (AssetDatabase.LoadMainAssetAtPath(target) != null)
-                    throw new InvalidOperationException($"Refusing to overwrite existing asset '{target}'.");
-            }
         }
 
         private static void EnsureFolders()
@@ -119,21 +124,40 @@ namespace Qusap.Editor
 
         private static AnimationClip BuildNeutralClip()
         {
-            var clip = new AnimationClip
+            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(ClipPath);
+            if (clip == null)
             {
-                name = "Qusap_Idle_Manual_v1",
-                frameRate = 60f,
-                wrapMode = WrapMode.Loop
-            };
-            AssetDatabase.CreateAsset(clip, ClipPath);
+                clip = new AnimationClip();
+                AssetDatabase.CreateAsset(clip, ClipPath);
+            }
+
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+                AnimationUtility.SetEditorCurve(clip, binding, null);
+            foreach (EditorCurveBinding binding in AnimationUtility.GetObjectReferenceCurveBindings(clip))
+                AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
+
+            clip.name = "Qusap_Idle_Manual_v1";
+            clip.frameRate = 60f;
+            clip.wrapMode = WrapMode.Loop;
+            EditorUtility.SetDirty(clip);
             return clip;
         }
 
         private static AnimatorController BuildController(AnimationClip clip)
         {
-            AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+            if (controller == null)
+                controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+
+            AnimatorControllerLayer[] layers = controller.layers;
+            layers[0].name = "Manual Authoring";
+            controller.layers = layers;
             AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
-            AnimatorState state = stateMachine.AddState("Idle_Manual_v1");
+            stateMachine.name = "Manual Authoring";
+            AnimatorState state = stateMachine.states
+                .Select(child => child.state)
+                .FirstOrDefault(candidate => candidate.name == "Idle_Manual_v1");
+            state ??= stateMachine.AddState("Idle_Manual_v1");
             state.motion = clip;
             state.writeDefaultValues = true;
             stateMachine.defaultState = state;
@@ -157,27 +181,51 @@ namespace Qusap.Editor
 
                 Transform animationRoot = CreateTransform(AnimationRootName, root.transform);
                 GameObject visualInstance = (GameObject)PrefabUtility.InstantiatePrefab(sourceVisual);
+                visualInstance.transform.SetPositionAndRotation(Vector3.zero, AuthoringFacingRotation);
+                visualInstance.transform.localScale = Vector3.one;
                 PrefabUtility.UnpackPrefabInstance(
                     visualInstance,
                     PrefabUnpackMode.Completely,
                     InteractionMode.AutomatedAction);
 
                 Transform importedModelSpace = FindUnique(visualInstance.transform, "QusapVisualRoot");
-                importedModelSpace.SetParent(animationRoot, true);
-                importedModelSpace.name = ModelSpaceName;
+                Transform importedBodyPivot = FindUnique(importedModelSpace, BodyPivotName);
+                Transform importedLeftFootPivot = FindUnique(importedModelSpace, LeftFootPivotName);
+                Transform importedRightFootPivot = FindUnique(importedModelSpace, RightFootPivotName);
+                Transform bodyModel = FindUnique(importedBodyPivot, "Body");
+                Transform leftFootModel = FindUnique(importedLeftFootPivot, "FloatingFoot_L");
+                Transform rightFootModel = FindUnique(importedRightFootPivot, "FloatingFoot_R");
+
+                Transform bodyPivot = BuildUnityAxisControl(
+                    animationRoot,
+                    BodyPivotName,
+                    BodyModelSpaceName,
+                    importedBodyPivot,
+                    bodyModel);
+                Transform leftFootPivot = BuildUnityAxisControl(
+                    animationRoot,
+                    LeftFootPivotName,
+                    LeftFootModelSpaceName,
+                    importedLeftFootPivot,
+                    leftFootModel);
+                Transform rightFootPivot = BuildUnityAxisControl(
+                    animationRoot,
+                    RightFootPivotName,
+                    RightFootModelSpaceName,
+                    importedRightFootPivot,
+                    rightFootModel);
                 Object.DestroyImmediate(visualInstance);
 
-                Transform bodyPivot = FindUnique(importedModelSpace, BodyPivotName);
-                Transform leftFootPivot = FindUnique(importedModelSpace, LeftFootPivotName);
-                Transform rightFootPivot = FindUnique(importedModelSpace, RightFootPivotName);
                 Transform weaponSocket = CreateTransform(WeaponSocketName, animationRoot);
-                weaponSocket.localPosition = new Vector3(1.15f, 1.25f, -0.35f);
-                weaponSocket.localRotation = Quaternion.Euler(0f, 0f, -12f);
+                weaponSocket.localPosition = AuthoringFacingRotation
+                    * new Vector3(1.15f, 1.25f, -0.35f);
 
                 GameObject swordInstance = (GameObject)PrefabUtility.InstantiatePrefab(
                     blueSword, weaponSocket);
                 swordInstance.name = blueSword.name;
-                swordInstance.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                swordInstance.transform.SetLocalPositionAndRotation(
+                    Vector3.zero,
+                    AuthoringFacingRotation * Quaternion.Euler(0f, 0f, -12f));
                 swordInstance.transform.localScale = Vector3.one * 0.70f;
 
                 SetNeutralCurves(root.transform, clip, bodyPivot);
@@ -194,6 +242,28 @@ namespace Qusap.Editor
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        private static Transform BuildUnityAxisControl(
+            Transform animationRoot,
+            string controlName,
+            string correctionName,
+            Transform importedPivot,
+            Transform rigidModel)
+        {
+            Vector3 pivotPosition = animationRoot.InverseTransformPoint(importedPivot.position);
+            Quaternion pivotWorldRotation = importedPivot.rotation;
+            Vector3 pivotWorldScale = importedPivot.lossyScale;
+
+            Transform control = CreateTransform(controlName, animationRoot);
+            control.localPosition = pivotPosition;
+
+            Transform correction = CreateTransform(correctionName, control);
+            correction.localRotation = Quaternion.Inverse(control.rotation) * pivotWorldRotation;
+            correction.localScale = pivotWorldScale;
+
+            rigidModel.SetParent(correction, false);
+            return control;
         }
 
         private static void SetNeutralCurves(Transform animatorRoot, AnimationClip clip, Transform control)
@@ -226,15 +296,26 @@ namespace Qusap.Editor
         private static void BuildAuthoringScene(GameObject rigPrefab)
         {
             Scene previousActive = SceneManager.GetActiveScene();
-            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
-            scene.name = "Qusap_AnimationAuthoring";
+            Scene scene = GetLoadedScene(ScenePath);
+            bool closeWhenFinished = !scene.IsValid();
+            if (closeWhenFinished)
+            {
+                scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+                scene.name = "Qusap_AnimationAuthoring";
+            }
+            else
+            {
+                foreach (GameObject sceneRoot in scene.GetRootGameObjects())
+                    Object.DestroyImmediate(sceneRoot);
+            }
+
             SceneManager.SetActiveScene(scene);
 
             try
             {
                 GameObject rig = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
                 rig.name = RootName;
-                rig.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 60f, 0f));
+                rig.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
                 rig.transform.localScale = Vector3.one;
 
                 GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -266,13 +347,17 @@ namespace Qusap.Editor
                 camera.nearClipPlane = 0.1f;
                 camera.farClipPlane = 50f;
 
-                if (!EditorSceneManager.SaveScene(scene, ScenePath))
+                bool saved = closeWhenFinished
+                    ? EditorSceneManager.SaveScene(scene, ScenePath)
+                    : EditorSceneManager.SaveScene(scene);
+                if (!saved)
                     throw new InvalidOperationException("Could not save the animation authoring scene.");
             }
             finally
             {
-                EditorSceneManager.CloseScene(scene, true);
-                if (previousActive.IsValid() && previousActive.isLoaded)
+                if (closeWhenFinished)
+                    EditorSceneManager.CloseScene(scene, true);
+                if (previousActive.IsValid() && previousActive.isLoaded && previousActive != scene)
                     SceneManager.SetActiveScene(previousActive);
             }
         }
@@ -293,19 +378,44 @@ namespace Qusap.Editor
             }
 
             Transform animationRoot = RequirePath(rig.transform, AnimationRootName);
-            Transform modelSpace = RequirePath(rig.transform, AnimationRootName + "/" + ModelSpaceName);
-            Transform body = RequirePath(rig.transform, AnimationRootName + "/" + ModelSpaceName + "/" + BodyPivotName);
-            Transform left = RequirePath(rig.transform, AnimationRootName + "/" + ModelSpaceName + "/" + LeftFootPivotName);
-            Transform right = RequirePath(rig.transform, AnimationRootName + "/" + ModelSpaceName + "/" + RightFootPivotName);
+            Transform body = RequirePath(rig.transform, AnimationRootName + "/" + BodyPivotName);
+            Transform bodyModelSpace = RequirePath(
+                rig.transform,
+                AnimationRootName + "/" + BodyPivotName + "/" + BodyModelSpaceName);
+            Transform left = RequirePath(rig.transform, AnimationRootName + "/" + LeftFootPivotName);
+            Transform leftModelSpace = RequirePath(
+                rig.transform,
+                AnimationRootName + "/" + LeftFootPivotName + "/" + LeftFootModelSpaceName);
+            Transform right = RequirePath(rig.transform, AnimationRootName + "/" + RightFootPivotName);
+            Transform rightModelSpace = RequirePath(
+                rig.transform,
+                AnimationRootName + "/" + RightFootPivotName + "/" + RightFootModelSpaceName);
             Transform socket = RequirePath(rig.transform, AnimationRootName + "/" + WeaponSocketName);
 
             foreach (Transform control in new[] { animationRoot, body, left, right, socket })
             {
                 if (!Approximately(control.localScale, Vector3.one))
                     throw new InvalidOperationException($"Animated control '{control.name}' must have local scale 1.");
+                if (!Approximately(control.localRotation, Quaternion.identity))
+                    throw new InvalidOperationException($"Animated control '{control.name}' must use Unity identity axes.");
+                ValidateAncestors(control, rig.transform);
             }
 
-            MeshFilter[] characterMeshes = modelSpace.GetComponentsInChildren<MeshFilter>(true);
+            if (animationRoot.parent != rig.transform
+                || body.parent != animationRoot
+                || left.parent != animationRoot
+                || right.parent != animationRoot
+                || socket.parent != animationRoot
+                || bodyModelSpace.parent != body
+                || leftModelSpace.parent != left
+                || rightModelSpace.parent != right)
+            {
+                throw new InvalidOperationException("The authoring controls do not use the required flat Unity-axis hierarchy.");
+            }
+
+            MeshFilter[] characterMeshes = new[] { bodyModelSpace, leftModelSpace, rightModelSpace }
+                .SelectMany(node => node.GetComponentsInChildren<MeshFilter>(true))
+                .ToArray();
             if (characterMeshes.Length != 3
                 || characterMeshes.Any(mesh => AssetDatabase.GetAssetPath(mesh.sharedMesh) != CharacterModelPath))
             {
@@ -317,6 +427,9 @@ namespace Qusap.Editor
             {
                 throw new InvalidOperationException("WeaponSocket must contain exactly the blue sword prefab.");
             }
+
+            ValidateUnityAxisTranslation(rig, body, Vector3.up, "BodyPivot Y");
+            ValidateUnityAxisTranslation(rig, left, Vector3.right, "FootPivot_L X");
         }
 
         private static void ValidateClip(Transform rigRoot, AnimationClip clip)
@@ -326,9 +439,9 @@ namespace Qusap.Editor
 
             var expectedPaths = new HashSet<string>
             {
-                AnimationRootName + "/" + ModelSpaceName + "/" + BodyPivotName,
-                AnimationRootName + "/" + ModelSpaceName + "/" + LeftFootPivotName,
-                AnimationRootName + "/" + ModelSpaceName + "/" + RightFootPivotName,
+                AnimationRootName + "/" + BodyPivotName,
+                AnimationRootName + "/" + LeftFootPivotName,
+                AnimationRootName + "/" + RightFootPivotName,
                 AnimationRootName + "/" + WeaponSocketName
             };
             EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings(clip);
@@ -336,6 +449,7 @@ namespace Qusap.Editor
                 throw new InvalidOperationException($"Expected 28 neutral transform curves; found {bindings.Length}.");
             if (bindings.Any(binding => !expectedPaths.Contains(binding.path)
                     || binding.path == AnimationRootName
+                    || binding.path.IndexOf("ModelSpace", StringComparison.Ordinal) >= 0
                     || binding.propertyName.IndexOf("Scale", StringComparison.OrdinalIgnoreCase) >= 0
                     || (!binding.propertyName.StartsWith("m_LocalPosition", StringComparison.Ordinal)
                         && !binding.propertyName.StartsWith("m_LocalRotation", StringComparison.Ordinal))))
@@ -371,7 +485,10 @@ namespace Qusap.Editor
         private static void ValidateScene()
         {
             Scene previousActive = SceneManager.GetActiveScene();
-            Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+            Scene scene = GetLoadedScene(ScenePath);
+            bool closeWhenFinished = !scene.IsValid();
+            if (closeWhenFinished)
+                scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
             try
             {
                 string[] expectedRoots =
@@ -384,6 +501,13 @@ namespace Qusap.Editor
                 string[] actualRoots = scene.GetRootGameObjects().Select(root => root.name).OrderBy(name => name).ToArray();
                 if (!actualRoots.SequenceEqual(expectedRoots.OrderBy(name => name)))
                     throw new InvalidOperationException("The authoring scene contains unexpected root objects.");
+                GameObject sceneRig = scene.GetRootGameObjects().Single(root => root.name == RootName);
+                if (!Approximately(sceneRig.transform.localScale, Vector3.one)
+                    || !Approximately(sceneRig.transform.localRotation, Quaternion.identity))
+                {
+                    throw new InvalidOperationException(
+                        "The authoring scene rig root must preserve standard Unity axes and scale 1.");
+                }
                 if (scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<MonoBehaviour>(true)).Any())
                     throw new InvalidOperationException("The authoring scene contains runtime scripts.");
                 if (scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<Rigidbody>(true)).Any()
@@ -399,8 +523,9 @@ namespace Qusap.Editor
             }
             finally
             {
-                EditorSceneManager.CloseScene(scene, true);
-                if (previousActive.IsValid() && previousActive.isLoaded)
+                if (closeWhenFinished)
+                    EditorSceneManager.CloseScene(scene, true);
+                if (previousActive.IsValid() && previousActive.isLoaded && previousActive != scene)
                     SceneManager.SetActiveScene(previousActive);
             }
         }
@@ -425,6 +550,190 @@ namespace Qusap.Editor
                     throw new InvalidOperationException($"Weapon visual '{path}' is not a rigid visual-only prefab.");
                 }
             }
+        }
+
+        private static void ValidateAncestors(Transform control, Transform rigRoot)
+        {
+            for (Transform current = control.parent; current != null; current = current.parent)
+            {
+                if (!Approximately(current.localScale, Vector3.one)
+                    || !Approximately(current.localRotation, Quaternion.identity))
+                {
+                    throw new InvalidOperationException(
+                        $"Ancestor '{current.name}' of control '{control.name}' must have identity rotation and scale 1.");
+                }
+
+                if (current == rigRoot)
+                    return;
+            }
+
+            throw new InvalidOperationException($"Control '{control.name}' is not under the rig root.");
+        }
+
+        private static void ValidateUnityAxisTranslation(
+            GameObject rigPrefab,
+            Transform prefabControl,
+            Vector3 localAxis,
+            string label)
+        {
+            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab);
+            try
+            {
+                string path = AnimationUtility.CalculateTransformPath(prefabControl, rigPrefab.transform);
+                Transform control = RequirePath(instance.transform, path);
+                Vector3 before = control.position;
+                const float distance = 0.25f;
+                control.localPosition += localAxis * distance;
+                Vector3 actualDelta = control.position - before;
+                Vector3 expectedDelta = localAxis * distance;
+                if (!Approximately(actualDelta, expectedDelta, MatrixTolerance))
+                {
+                    throw new InvalidOperationException(
+                        $"{label} does not map exactly to the corresponding Unity world axis. "
+                        + $"Expected {expectedDelta}; got {actualDelta}.");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        private static void ValidateAppearanceAgainstSources(GameObject rig)
+        {
+            var referenceRoot = new GameObject("LegacyAuthoringPoseReference");
+            try
+            {
+                referenceRoot.transform.SetPositionAndRotation(Vector3.zero, AuthoringFacingRotation);
+                referenceRoot.transform.localScale = Vector3.one;
+
+                GameObject sourceVisual = (GameObject)PrefabUtility.InstantiatePrefab(
+                    LoadRequired<GameObject>(ModularVisualPrefabPath),
+                    referenceRoot.transform);
+                sourceVisual.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                sourceVisual.transform.localScale = Vector3.one;
+
+                Transform socket = CreateTransform(WeaponSocketName, referenceRoot.transform);
+                socket.localPosition = new Vector3(1.15f, 1.25f, -0.35f);
+                socket.localRotation = Quaternion.Euler(0f, 0f, -12f);
+                GameObject sword = (GameObject)PrefabUtility.InstantiatePrefab(
+                    LoadRequired<GameObject>(BlueSwordPrefabPath),
+                    socket);
+                sword.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                sword.transform.localScale = Vector3.one * 0.70f;
+
+                AppearanceSnapshot expected = CaptureAppearance(referenceRoot);
+                AppearanceSnapshot actual = CapturePrefabAppearance(rig);
+                CompareAppearance(expected, actual, "legacy source/current authoring pose");
+            }
+            finally
+            {
+                Object.DestroyImmediate(referenceRoot);
+            }
+        }
+
+        private static AppearanceSnapshot CaptureSceneRigAppearance()
+        {
+            Scene previousActive = SceneManager.GetActiveScene();
+            Scene scene = GetLoadedScene(ScenePath);
+            bool closeWhenFinished = !scene.IsValid();
+            if (closeWhenFinished)
+                scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+            try
+            {
+                GameObject rig = scene.GetRootGameObjects().Single(root => root.name == RootName);
+                return CaptureAppearance(rig);
+            }
+            finally
+            {
+                if (closeWhenFinished)
+                    EditorSceneManager.CloseScene(scene, true);
+                if (previousActive.IsValid() && previousActive.isLoaded && previousActive != scene)
+                    SceneManager.SetActiveScene(previousActive);
+            }
+        }
+
+        private static Scene GetLoadedScene(string path)
+        {
+            for (int index = 0; index < SceneManager.sceneCount; index++)
+            {
+                Scene candidate = SceneManager.GetSceneAt(index);
+                if (candidate.path == path)
+                    return candidate;
+            }
+
+            return default;
+        }
+
+        private static AppearanceSnapshot CapturePrefabAppearance(GameObject prefab)
+        {
+            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            try
+            {
+                instance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                instance.transform.localScale = Vector3.one;
+                return CaptureAppearance(instance);
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        private static AppearanceSnapshot CaptureAppearance(GameObject root)
+        {
+            var matrices = new Dictionary<string, Matrix4x4>(StringComparer.Ordinal);
+            var materials = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (MeshFilter meshFilter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                string key = AssetIdentifier(meshFilter.sharedMesh) + ":" + meshFilter.name;
+                if (!matrices.TryAdd(key, meshFilter.transform.localToWorldMatrix))
+                    throw new InvalidOperationException($"Duplicate visual mesh key '{key}'.");
+
+                MeshRenderer renderer = meshFilter.GetComponent<MeshRenderer>();
+                if (renderer == null)
+                    throw new InvalidOperationException($"Rigid mesh '{meshFilter.name}' has no MeshRenderer.");
+                materials.Add(
+                    key,
+                    string.Join(",", renderer.sharedMaterials.Select(AssetIdentifier)));
+            }
+
+            return new AppearanceSnapshot(matrices, materials);
+        }
+
+        private static void CompareAppearance(
+            AppearanceSnapshot expected,
+            AppearanceSnapshot actual,
+            string context)
+        {
+            if (expected.Matrices.Count != actual.Matrices.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Visual mesh count changed during {context}: "
+                    + $"expected {expected.Matrices.Count}, got {actual.Matrices.Count}.");
+            }
+
+            foreach (KeyValuePair<string, Matrix4x4> item in expected.Matrices)
+            {
+                if (!actual.Matrices.TryGetValue(item.Key, out Matrix4x4 actualMatrix))
+                    throw new InvalidOperationException($"Visual mesh '{item.Key}' is missing after {context}.");
+                if (!Approximately(item.Value, actualMatrix, MatrixTolerance))
+                    throw new InvalidOperationException($"World matrix for '{item.Key}' changed during {context}.");
+                if (!actual.Materials.TryGetValue(item.Key, out string actualMaterials)
+                    || expected.Materials[item.Key] != actualMaterials)
+                {
+                    throw new InvalidOperationException($"Materials for '{item.Key}' changed during {context}.");
+                }
+            }
+        }
+
+        private static string AssetIdentifier(Object asset)
+        {
+            if (asset == null)
+                return "null";
+            return AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out string guid, out long localId)
+                ? guid + ":" + localId
+                : asset.name;
         }
 
         private static Transform CreateTransform(string name, Transform parent)
@@ -467,6 +776,43 @@ namespace Qusap.Editor
             return Mathf.Approximately(left.x, right.x)
                 && Mathf.Approximately(left.y, right.y)
                 && Mathf.Approximately(left.z, right.z);
+        }
+
+        private static bool Approximately(Vector3 left, Vector3 right, float tolerance)
+        {
+            return Mathf.Abs(left.x - right.x) <= tolerance
+                && Mathf.Abs(left.y - right.y) <= tolerance
+                && Mathf.Abs(left.z - right.z) <= tolerance;
+        }
+
+        private static bool Approximately(Quaternion left, Quaternion right)
+        {
+            return Mathf.Abs(Quaternion.Dot(left, right)) >= 0.999999f;
+        }
+
+        private static bool Approximately(Matrix4x4 left, Matrix4x4 right, float tolerance)
+        {
+            for (int index = 0; index < 16; index++)
+            {
+                if (Mathf.Abs(left[index] - right[index]) > tolerance)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private sealed class AppearanceSnapshot
+        {
+            public AppearanceSnapshot(
+                Dictionary<string, Matrix4x4> matrices,
+                Dictionary<string, string> materials)
+            {
+                Matrices = matrices;
+                Materials = materials;
+            }
+
+            public Dictionary<string, Matrix4x4> Matrices { get; }
+            public Dictionary<string, string> Materials { get; }
         }
     }
 }

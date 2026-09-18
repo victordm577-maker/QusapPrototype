@@ -1,0 +1,83 @@
+{
+    "generatedAtUtc": "2026-09-17T07:22:22.2714470Z",
+    "characterAsset": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Character/Qusap75K_Rigged_Test_v2.fbx",
+    "animationAsset": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Animation/RM_Roll_front.fbx",
+    "clipName": "RM_Roll_front",
+    "clipLengthSeconds": 1.1666667461395264,
+    "clipFrameRate": 30.0,
+    "approximateFrameCount": 35,
+    "loopTime": false,
+    "loopPose": false,
+    "bakeRootRotation": true,
+    "bakeRootPositionY": true,
+    "bakeRootPositionXZ": true,
+    "qusapAvatarValid": true,
+    "animationAvatarValid": true,
+    "animatorApplyRootMotion": false,
+    "rootStayedFixed": true,
+    "maximumBoundsGrowthRatio": 1.0,
+    "grossStretchDetected": false,
+    "materialStatus": "Neutral URP Lit material used for deformation visibility; imported vertex color is not evaluated by this material.",
+    "controllerAsset": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Controller/Qusap75K_RollTest.controller",
+    "prefabAsset": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Qusap75K_AnimationTest.prefab",
+    "sceneAsset": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Scene/Qusap75K_RollTest.unity",
+    "sceneRootObjects": [
+        "DirectionalLight",
+        "Qusap75K_AnimationTest",
+        "SideCamera",
+        "VisualGround_NoCollider"
+    ],
+    "poseSamples": [
+        {
+            "label": "Start",
+            "time": 0.0,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.00000, -0.02270, 0.01900)",
+            "boundsSize": "(1.20656, 1.07133, 0.75465)",
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/Screenshots/RollFront_Start.png"
+        },
+        {
+            "label": "Quarter",
+            "time": 0.2916666865348816,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(-0.00022, 0.44027, 0.01795)",
+            "boundsSize": "(0.97297, 1.09864, 0.71463)",
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/Screenshots/RollFront_Quarter.png"
+        },
+        {
+            "label": "Middle",
+            "time": 0.5833333730697632,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.02206, 0.11154, 0.42490)",
+            "boundsSize": "(0.97593, 1.00076, 1.13588)",
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/Screenshots/RollFront_Middle.png"
+        },
+        {
+            "label": "ThreeQuarter",
+            "time": 0.8750000596046448,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.08640, 0.11678, 0.65600)",
+            "boundsSize": "(1.10121, 0.97083, 1.14324)",
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/Screenshots/RollFront_ThreeQuarter.png"
+        },
+        {
+            "label": "End",
+            "time": 1.133333444595337,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.13007, 0.27010, 0.95126)",
+            "boundsSize": "(1.08506, 1.08834, 0.91820)",
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/Screenshots/RollFront_End.png"
+        }
+    ],
+    "notes": [
+        "The isolated prefab contains no Rigidbody, collider, gameplay, combat, input, or camera scripts.",
+        "Pose screenshots were rendered by deterministic Editor sampling; Play Mode was not invoked because no safe Unity integration was available.",
+        "Visual review of horns, claws, scales, armor, floor contact, and subtle deformation remains a human inspection step."
+    ],
+    "passed": true
+}

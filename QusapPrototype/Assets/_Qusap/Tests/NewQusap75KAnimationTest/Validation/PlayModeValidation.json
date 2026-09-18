@@ -1,0 +1,83 @@
+{
+    "generatedAtUtc": "2026-09-17T07:24:22.7602700Z",
+    "stateName": "RollFront",
+    "clipLengthSeconds": 1.1666667461395264,
+    "observedNormalizedTime": 1.214280366897583,
+    "animatorIsHuman": true,
+    "applyRootMotion": false,
+    "rootStayedFixed": true,
+    "maximumRootDisplacement": 0.0,
+    "maximumBoneAngleDelta": 179.97366333007813,
+    "poseChanged": true,
+    "heldFinalPoseWithoutLoop": true,
+    "finiteBounds": true,
+    "sweptBoneBoundsCenter": {
+        "x": 0.0552157461643219,
+        "y": 0.2861849367618561,
+        "z": 0.6899358630180359
+    },
+    "sweptBoneBoundsSize": {
+        "x": 0.5642087459564209,
+        "y": 0.8408229351043701,
+        "z": 1.4028782844543458
+    },
+    "samples": [
+        {
+            "label": "Start",
+            "time": 0.043742090463638309,
+            "normalizedTime": 0.017142849043011667,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(-0.00454, 0.45453, 0.03848)",
+            "boundsSize": "(0.98125, 1.09421, 0.75652)",
+            "maximumBoneAngleDelta": 39.931888580322269,
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/PlayModeScreenshots/RollFront_PlayMode_Start.png"
+        },
+        {
+            "label": "Quarter",
+            "time": 0.3404274880886078,
+            "normalizedTime": 0.03749321773648262,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(-0.01114, 0.46180, 0.07416)",
+            "boundsSize": "(0.98921, 1.14739, 0.82371)",
+            "maximumBoneAngleDelta": 41.40217590332031,
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/PlayModeScreenshots/RollFront_PlayMode_Quarter.png"
+        },
+        {
+            "label": "Middle",
+            "time": 0.5833619832992554,
+            "normalizedTime": 0.49990078806877139,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.10551, 0.11673, 0.67204)",
+            "boundsSize": "(1.06281, 0.97074, 1.17533)",
+            "maximumBoneAngleDelta": 129.26271057128907,
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/PlayModeScreenshots/RollFront_PlayMode_Middle.png"
+        },
+        {
+            "label": "ThreeQuarter",
+            "time": 0.8750718832015991,
+            "normalizedTime": 0.7499322891235352,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.10827, 0.26408, 0.95101)",
+            "boundsSize": "(1.12878, 1.09996, 0.91796)",
+            "maximumBoneAngleDelta": 100.29583740234375,
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/PlayModeScreenshots/RollFront_PlayMode_ThreeQuarter.png"
+        },
+        {
+            "label": "End",
+            "time": 1.1667400598526,
+            "normalizedTime": 0.9999464154243469,
+            "rootPosition": "(0.00000, 0.00000, 0.00000)",
+            "boundsCenter": "(0.04229, 0.39496, 1.16480)",
+            "boundsSize": "(0.97569, 1.15322, 0.94450)",
+            "maximumBoneAngleDelta": 83.3725357055664,
+            "finiteBounds": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Validation/PlayModeScreenshots/RollFront_PlayMode_End.png"
+        }
+    ],
+    "passed": true,
+    "error": ""
+}

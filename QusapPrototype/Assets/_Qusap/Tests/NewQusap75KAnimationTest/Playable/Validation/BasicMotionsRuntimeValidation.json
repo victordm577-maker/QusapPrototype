@@ -1,0 +1,87 @@
+{
+    "generatedAtUtc": "2026-09-17T19:04:12.4153459Z",
+    "animatorIsHuman": true,
+    "applyRootMotion": false,
+    "clips": [
+        {
+            "role": "Idle",
+            "observedState": "Idle",
+            "normalizedTime": 0.057587914168834689,
+            "rootDisplacement": 0.0,
+            "maximumBoneAngleDelta": 37.37279510498047,
+            "boundsGrowthRatio": 1.0278775691986085,
+            "finitePose": true,
+            "returnedToIdle": false,
+            "heldFinalPose": false,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/Validation/BasicMotionsRuntimeScreenshots/Idle.png",
+            "passed": true
+        },
+        {
+            "role": "Walk",
+            "observedState": "Walk",
+            "normalizedTime": 0.5721995830535889,
+            "rootDisplacement": 0.0,
+            "maximumBoneAngleDelta": 37.26778793334961,
+            "boundsGrowthRatio": 1.0378464460372925,
+            "finitePose": true,
+            "returnedToIdle": false,
+            "heldFinalPose": false,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/Validation/BasicMotionsRuntimeScreenshots/Walk.png",
+            "passed": true
+        },
+        {
+            "role": "Run",
+            "observedState": "Run",
+            "normalizedTime": 0.5956020951271057,
+            "rootDisplacement": 0.0,
+            "maximumBoneAngleDelta": 97.30001068115235,
+            "boundsGrowthRatio": 1.1085997819900513,
+            "finitePose": true,
+            "returnedToIdle": false,
+            "heldFinalPose": false,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/Validation/BasicMotionsRuntimeScreenshots/Run.png",
+            "passed": true
+        },
+        {
+            "role": "Jumping",
+            "observedState": "Jumping",
+            "normalizedTime": 0.53608238697052,
+            "rootDisplacement": 0.0,
+            "maximumBoneAngleDelta": 84.50016784667969,
+            "boundsGrowthRatio": 1.0907527208328248,
+            "finitePose": true,
+            "returnedToIdle": true,
+            "heldFinalPose": false,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/Validation/BasicMotionsRuntimeScreenshots/Jumping.png",
+            "passed": true
+        },
+        {
+            "role": "Dying",
+            "observedState": "Dying",
+            "normalizedTime": 0.505764901638031,
+            "rootDisplacement": 0.0,
+            "maximumBoneAngleDelta": 114.14136505126953,
+            "boundsGrowthRatio": 1.1993087530136109,
+            "finitePose": true,
+            "returnedToIdle": false,
+            "heldFinalPose": true,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/Validation/BasicMotionsRuntimeScreenshots/Dying_Final.png",
+            "passed": true
+        },
+        {
+            "role": "Roll",
+            "observedState": "RollFront",
+            "normalizedTime": 0.4956028163433075,
+            "rootDisplacement": 0.0,
+            "maximumBoneAngleDelta": 130.30294799804688,
+            "boundsGrowthRatio": 1.1296000480651856,
+            "finitePose": true,
+            "returnedToIdle": true,
+            "heldFinalPose": false,
+            "screenshot": "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/Validation/BasicMotionsRuntimeScreenshots/Roll.png",
+            "passed": true
+        }
+    ],
+    "passed": true,
+    "error": ""
+}

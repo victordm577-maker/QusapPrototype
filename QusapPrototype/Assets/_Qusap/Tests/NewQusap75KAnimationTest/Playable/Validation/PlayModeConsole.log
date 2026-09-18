@@ -1,0 +1,2 @@
+QUSAP75K_PLAYABLE_PLAYMODE_LOG
+WARNING|Player2_Qusap has no gamepad available for Player2Gamepad. It will remain unpaired.|UnityEngine.Debug:LogWarning (object,UnityEngine.Object) Qusap.QusapInputReader:ConfigureRuntimeInput () (at Assets/_Qusap/Scripts/Input/QusapInputReader.cs:399) Qusap.QusapInputReader:Awake () (at Assets/_Qusap/Scripts/Input/QusapInputReader.cs:65) 

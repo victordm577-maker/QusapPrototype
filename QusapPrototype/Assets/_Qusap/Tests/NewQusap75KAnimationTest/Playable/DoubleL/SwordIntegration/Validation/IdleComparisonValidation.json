@@ -1,0 +1,27 @@
+{
+    "generatedAtUtc": "2026-09-18T16:54:12.7516353Z",
+    "keys1To3Mapped": true,
+    "statesReached": [
+        true,
+        true,
+        true
+    ],
+    "clipsLoop": [
+        true,
+        true,
+        true
+    ],
+    "sameSwordTransform": true,
+    "rendererAlwaysEnabled": true,
+    "rootMotionDisabled": true,
+    "alignmentLocalPosition": "(0,004550, 0,002540, 0,014070)",
+    "alignmentLocalEulerAngles": "(346,044300, 357,608300, 321,056900)",
+    "alignmentLocalScale": "(0,600000, 0,600000, 0,600000)",
+    "screenshots": [
+        "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/DoubleL/SwordIntegration/Validation/Idle_B1_SwordComparison.png",
+        "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/DoubleL/SwordIntegration/Validation/Idle_B2_SwordComparison.png",
+        "Assets/_Qusap/Tests/NewQusap75KAnimationTest/Playable/DoubleL/SwordIntegration/Validation/Idle_B3_SwordComparison.png"
+    ],
+    "consoleErrors": [],
+    "passed": true
+}

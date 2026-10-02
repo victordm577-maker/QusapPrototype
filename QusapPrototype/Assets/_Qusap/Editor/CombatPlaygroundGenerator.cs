@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System.Linq;
 
 namespace Qusap.EditorTools
 {
@@ -371,7 +372,7 @@ namespace Qusap.EditorTools
                 return false;
             }
 
-            if (IsPromotedCombatPlayerPrefabComplete(player))
+            if (IsApprovedDoubleLPlayerComplete(player) || IsPromotedCombatPlayerPrefabComplete(player))
             {
                 return true;
             }
@@ -494,6 +495,39 @@ namespace Qusap.EditorTools
                     == equippedPresenter
                 && serializedCombatVisual.FindProperty("legacyWeaponPresenter").objectReferenceValue
                     == legacyWeaponPresenter;
+        }
+
+        // The promoted visual keeps the generated gameplay root and disables
+        // legacy writers. Recognize that complete layout instead of rebuilding
+        // the player, scene and platforms on the next editor startup.
+        private static bool IsApprovedDoubleLPlayerComplete(GameObject player)
+        {
+            var presenter = player.GetComponent<QusapDoubleLGroundAttackPresenter>();
+            var visual = player.transform.Find("ApprovedDoubleL_Presentation");
+            if (presenter == null || !presenter.enabled || visual == null
+                || presenter.Visual != visual.gameObject || presenter.Animator == null
+                || presenter.Animator.runtimeAnimatorController == null || presenter.Animator.applyRootMotion
+                || player.GetComponents<QusapDoubleLGroundAttackPresenter>().Length != 1
+                || player.GetComponent<QusapCombatController>() == null || player.GetComponent<QusapInputReader>() == null
+                || player.GetComponent<Rigidbody>() == null || player.GetComponent<CapsuleCollider>() == null
+                || player.GetComponent<QusapHorizontalMotor>() == null || player.GetComponent<QusapVerticalMotor>() == null
+                || player.GetComponent<QusapDashMotor>() == null || player.GetComponent<QusapWeaponEquipment>() == null)
+                return false;
+            var serialized = new SerializedObject(presenter);
+            if (serialized.FindProperty("body").objectReferenceValue != player.GetComponent<Rigidbody>()
+                || serialized.FindProperty("combat").objectReferenceValue != player.GetComponent<QusapCombatController>()
+                || serialized.FindProperty("ground").objectReferenceValue != player.GetComponent<QusapGroundSensor>())
+                return false;
+            if (player.GetComponents<Behaviour>().Any(c => c.enabled &&
+                (c is QusapAnimationDriver || c is QusapModularFacingPresenter || c is QusapModularCombatVisualPresenter
+                 || c is QusapHitReactionVisual || c is QusapEquippedWeaponPresenter || c is QusapWeaponAttackVisualPresenter)))
+                return false;
+            var renderers = player.GetComponentsInChildren<Renderer>(true).Where(r => r.enabled).ToArray();
+            var transforms = visual.GetComponentsInChildren<Transform>(true);
+            return renderers.Length == 2 && renderers.All(r => r.transform.IsChildOf(visual))
+                && transforms.Count(t => t.name == "WeaponGripSocket_R") == 1
+                && transforms.Count(t => t.name == "WeaponGripSocket_L") == 1
+                && visual.GetComponentsInChildren<Animator>(true).All(a => !a.applyRootMotion);
         }
 
         private static bool IsOneWayPlatformPrefabComplete()

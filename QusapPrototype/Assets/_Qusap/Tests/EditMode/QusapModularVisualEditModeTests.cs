@@ -235,7 +235,7 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void OfficialPlayerAndVariantUseSeparatedVisualAndSingleWeaponSocket()
+        public void OfficialPlayerAndVariantKeepLegacyReferencesAndUseApprovedBilateralPresentation()
         {
             WithPrefab(OfficialPlayerPrefabPath, AssertPromotedVisual);
             WithPrefab(PlayerVariantPath, AssertPromotedVisual);
@@ -285,15 +285,25 @@ namespace Qusap.Tests
             Transform[] sockets = root.GetComponentsInChildren<Transform>(true)
                 .Where(item => item.name == "WeaponSocket").ToArray();
             Assert.That(sockets, Has.Length.EqualTo(1));
-            Assert.That(sockets[0].gameObject.activeInHierarchy, Is.True);
+            Assert.That(sockets[0].gameObject.activeInHierarchy, Is.False,
+                "The native inventory reference is retained while its old sword stays hidden.");
             Assert.That(root.GetComponent<QusapAnimationDriver>().enabled, Is.False);
             Assert.That(root.GetComponent<QusapWeaponAttackVisualPresenter>().enabled, Is.False);
-            Assert.That(root.GetComponent<QusapModularCombatVisualPresenter>().enabled, Is.True);
+            Assert.That(root.GetComponent<QusapModularCombatVisualPresenter>().enabled, Is.False);
             Assert.That(root.GetComponentsInChildren<QusapModularCombatVisualPresenter>(false),
                 Has.Length.EqualTo(1));
-            Assert.That(root.GetComponentsInChildren<Animator>(false), Is.Empty);
+            var approvedVisual = root.transform.Find("ApprovedDoubleL_Presentation");
+            Assert.That(approvedVisual, Is.Not.Null);
+            Assert.That(approvedVisual.GetComponentsInChildren<Transform>(true)
+                .Count(item => item.name == "WeaponGripSocket_R"), Is.EqualTo(1));
+            Assert.That(approvedVisual.GetComponentsInChildren<Transform>(true)
+                .Count(item => item.name == "WeaponGripSocket_L"), Is.EqualTo(1));
+            var approvedAnimators = root.GetComponentsInChildren<Animator>(false);
+            Assert.That(approvedAnimators, Has.Length.EqualTo(1));
+            Assert.That(approvedAnimators[0].enabled, Is.False);
+            Assert.That(approvedAnimators[0].applyRootMotion, Is.False);
             Assert.That(root.GetComponentsInChildren<Renderer>(false)
-                .Count(renderer => renderer.enabled), Is.EqualTo(3));
+                .Count(renderer => renderer.enabled), Is.EqualTo(2));
         }
 
         private static void AssertSingleComponent<T>(GameObject root) where T : Component

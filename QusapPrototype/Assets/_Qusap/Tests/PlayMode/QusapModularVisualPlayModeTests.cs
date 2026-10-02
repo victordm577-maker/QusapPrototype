@@ -67,6 +67,33 @@ namespace Qusap.Tests
 
             for (int i = 0; i < 8; i++)
                 yield return new WaitForFixedUpdate();
+
+            // The main prefab now presents the approved DoubleL rig. These
+            // regression tests exercise the preserved modular components, so
+            // select their legacy presentation only on the in-memory fixture.
+            // First verify the official scene inherited the new main presenter.
+            foreach (PlayerView player in Players())
+            {
+                Behaviour approved = player.Root.GetComponents<Behaviour>()
+                    .Single(component => component.GetType().Name == "QusapDoubleLGroundAttackPresenter");
+                Assert.That(approved.enabled, Is.True);
+                Assert.That(player.Procedural.enabled, Is.False);
+                Transform visual = player.Root.transform.Find("ApprovedDoubleL_Presentation");
+                Assert.That(visual, Is.Not.Null);
+                Assert.That(visual.GetComponentsInChildren<Animator>(true)
+                    .All(animator => !animator.applyRootMotion), Is.True);
+                approved.enabled = false;
+                visual.gameObject.SetActive(false);
+                player.Root.transform.Find("WeaponSocket").gameObject.SetActive(true);
+                foreach (Renderer renderer in player.Rig.GetComponentsInChildren<Renderer>(true))
+                    renderer.enabled = true;
+                player.Facing.enabled = true;
+                player.Procedural.enabled = true;
+                player.Root.GetComponent<QusapHitReactionVisual>().enabled = true;
+                player.Root.GetComponent<QusapEquippedWeaponPresenter>().enabled = true;
+                player.Root.GetComponent<QusapEquippedWeaponPresenter>().RefreshPresentation();
+            }
+            yield return null;
         }
 
         [UnityTearDown]
@@ -118,7 +145,7 @@ namespace Qusap.Tests
         }
 
         [Test]
-        public void OfficialSceneContainsTwoVisibleModularPlayersAndNoActiveLegacyVisual()
+        public void PreservedModularFixtureContainsTwoVisiblePlayersAndNoActiveLegacyAnimator()
         {
             PlayerView[] players = Players();
             Assert.That(players, Has.Length.EqualTo(2));
@@ -183,9 +210,10 @@ namespace Qusap.Tests
             Assert.That(playerTwo.Root.transform.position.x, Is.LessThan(playerTwoStartX - 0.05f));
 
             inputFixture.Release(keyboard.dKey);
-            inputFixture.Set(gamepad.leftStick, Vector2.zero);
             inputFixture.Press(keyboard.spaceKey);
-            inputFixture.Press(gamepad.buttonSouth);
+            // A full state event also works after an editor update in batch,
+            // where DeltaStateEvent cannot read the gamepad's current buffer.
+            InputSystem.QueueStateEvent(gamepad, new GamepadState().WithButton(GamepadButton.South));
             InputSystem.Update();
             yield return null;
             yield return new WaitForFixedUpdate();
@@ -193,7 +221,7 @@ namespace Qusap.Tests
             Assert.That(playerTwo.Root.GetComponent<Rigidbody>().linearVelocity.y, Is.GreaterThan(0f));
 
             inputFixture.Release(keyboard.spaceKey);
-            inputFixture.Release(gamepad.buttonSouth);
+            InputSystem.QueueStateEvent(gamepad, new GamepadState());
             InputSystem.Update();
         }
 
@@ -210,7 +238,9 @@ namespace Qusap.Tests
             InputSystem.Update();
             yield return null;
             yield return new WaitForFixedUpdate();
-            yield return new WaitForEndOfFrame();
+            // Wait through LateUpdate without the unsupported batch-only
+            // WaitForEndOfFrame yield.
+            yield return null;
             Assert.That(player.Combat.FacingDirection, Is.EqualTo(-1));
             Assert.That(Mathf.Abs(Mathf.DeltaAngle(
                 player.Facing.OrientationPivot.localEulerAngles.y,
@@ -251,7 +281,7 @@ namespace Qusap.Tests
             Assert.That(playerTwo.Combat.CurrentAttackVariant, Is.EqualTo(QusapAttackVariant.WeaponLight));
             Assert.That(playerTwo.Root.GetComponent<QusapEquippedWeaponPresenter>().EquippedVisual,
                 Is.Not.Null);
-            inputFixture.Release(gamepad.buttonNorth);
+            InputSystem.QueueStateEvent(gamepad, new GamepadState());
             InputSystem.Update();
         }
 

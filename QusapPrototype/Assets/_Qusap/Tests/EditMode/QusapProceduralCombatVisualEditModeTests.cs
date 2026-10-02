@@ -548,7 +548,13 @@ namespace Qusap.Tests
             try
             {
                 Assert.That(root.GetComponents<QusapModularCombatVisualPresenter>(), Has.Length.EqualTo(1));
-                Assert.That(root.GetComponent<QusapModularCombatVisualPresenter>().enabled, Is.True);
+                Assert.That(root.GetComponent<QusapModularCombatVisualPresenter>().enabled, Is.False);
+                var approvedScript = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                    "Assets/_Qusap/Presentation/DoubleLGroundAttacks/QusapDoubleLGroundAttackPresenter.cs");
+                Assert.That(approvedScript, Is.Not.Null);
+                var approved = root.GetComponent(approvedScript.GetClass()) as Behaviour;
+                Assert.That(approved, Is.Not.Null);
+                Assert.That(approved.enabled, Is.True);
                 Assert.That(root.GetComponent<QusapWeaponAttackVisualPresenter>().enabled, Is.False);
                 Assert.That(root.GetComponentsInChildren<QusapModularVisualRig>(true), Has.Length.EqualTo(1));
                 Assert.That(root.GetComponentsInChildren<Transform>(true)

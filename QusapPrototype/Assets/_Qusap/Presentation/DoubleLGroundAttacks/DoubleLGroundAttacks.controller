@@ -18560,6 +18560,9 @@ AnimatorStateMachine:
   - serializedVersion: 1
     m_State: {fileID: 8077091508669929590}
     m_Position: {x: 45470, y: 83950, z: 0}
+  - serializedVersion: 1
+    m_State: {fileID: 4801106348506078053}
+    m_Position: {x: 45540, y: 84080, z: 0}
   m_ChildStateMachines: []
   m_AnyStateTransitions: []
   m_EntryTransitions: []
@@ -30068,6 +30071,32 @@ AnimatorState:
   m_MirrorParameter: PurchasedLeftPose
   m_CycleOffsetParameter: 
   m_TimeParameter: 
+--- !u!1102 &4801106348506078053
+AnimatorState:
+  serializedVersion: 6
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DashAir
+  m_Speed: 1
+  m_CycleOffset: 0
+  m_Transitions: []
+  m_StateMachineBehaviours: []
+  m_Position: {x: 50, y: 50, z: 0}
+  m_IKOnFeet: 0
+  m_WriteDefaultValues: 1
+  m_Mirror: 0
+  m_SpeedParameterActive: 0
+  m_MirrorParameterActive: 0
+  m_CycleOffsetParameterActive: 0
+  m_TimeParameterActive: 0
+  m_Motion: {fileID: 3152206486128967824, guid: 46bd9248ac1c461db1082f59b8ef80e3, type: 3}
+  m_Tag:
+  m_SpeedParameter:
+  m_MirrorParameter:
+  m_CycleOffsetParameter:
+  m_TimeParameter:
 --- !u!1102 &4812554763736745193
 AnimatorState:
   serializedVersion: 6
@@ -33412,7 +33441,7 @@ AnimatorState:
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
-  m_Motion: {fileID: -7816938606450766792, guid: e9947c07d6644569a1dbb347dfa6186e, type: 3}
+  m_Motion: {fileID: 3152206486128967824, guid: 46bd9248ac1c461db1082f59b8ef80e3, type: 3}
   m_Tag: 
   m_SpeedParameter: 
   m_MirrorParameter: 

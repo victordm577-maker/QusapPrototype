@@ -26,6 +26,8 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     uint wallJumpSequence;
     float rollRemaining, landingRemaining, wallJumpRemaining;
     bool wasGrounded;
+    bool wasDashing, dashStartedGrounded;
+    int wallJumpDirection=1, dashVisualDirection=1;
     readonly QusapDoubleLAirLocomotion airLocomotion=new QusapDoubleLAirLocomotion();
     public string AirPresentationState => airLocomotion.State;
     public float LandingImpactSpeed => airLocomotion.LastImpactSpeed;
@@ -168,7 +170,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     string Locomotion()
     {
         if(hitstun.IsInHitstun) return "Hitstun";
-        if(dash.IsDashing) return ground.IsGrounded?"RunForward":"Fall";
+        if(dash.IsDashing) return dashStartedGrounded?"RunForward":"DashAir";
         if(wallJumpRemaining>0) return "WallJump";
         if(vertical.IsWallSliding) return "WallSlide";
         if(!ground.IsGrounded || body.linearVelocity.y>0) return airLocomotion.State??(body.linearVelocity.y>0?"JumpRise":"Fall");
@@ -198,7 +200,16 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         rollRemaining=Mathf.Max(0,rollRemaining-delta); landingRemaining=Mathf.Max(0,landingRemaining-delta);wallJumpRemaining=Mathf.Max(0,wallJumpRemaining-delta);
         if(!wasGrounded && ground.IsGrounded && body.linearVelocity.y<=0)landingRemaining=.12f;
         wasGrounded=ground.IsGrounded;
-        if(vertical.WallJumpSequence!=wallJumpSequence){wallJumpSequence=vertical.WallJumpSequence;wallJumpRemaining=.14f;}
+        if(vertical.WallJumpSequence!=wallJumpSequence)
+        {
+            wallJumpSequence=vertical.WallJumpSequence;wallJumpRemaining=.14f;
+            wallJumpDirection=body.linearVelocity.x<0?-1:1;
+        }
+        // Classify once at the native dash start. Crossing an edge or landing
+        // during the burst must not restart it as a different visual action.
+        if(dash.IsDashing&&!wasDashing){dashStartedGrounded=ground.IsGrounded;dashVisualDirection=direction;}
+        if(dash.IsDashing&&Mathf.Abs(body.linearVelocity.x)>.001f)dashVisualDirection=body.linearVelocity.x<0?-1:1;
+        wasDashing=dash.IsDashing;
         if(dash.IsDashing || hitstun.IsInHitstun || !GroundedForPresentation)rollRemaining=0;
         airLocomotion.Observe(delta,ground.IsGrounded,body.linearVelocity.x,body.linearVelocity.y,
             dash.IsDashing||hitstun.IsInHitstun||combat.IsAttacking||combat.HasArmedFinisher||rollRemaining>0);
@@ -251,11 +262,16 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         else
         {
             if(clip>=0) { animator.Update(Mathf.Max(0,SourceLength-sourceTime)); ReturnToLocomotion(); }
-            direction=combat.FacingDirection<0?-1:1;
+            // WallSide is published by the real slide branch. Dash and the
+            // wall-jump impulse may move away from a wall despite input into it.
+            direction=dash.IsDashing?dashVisualDirection:
+                wallJumpRemaining>0?wallJumpDirection:
+                vertical.IsWallSliding&&vertical.WallSide!=0?vertical.WallSide:
+                combat.FacingDirection<0?-1:1;
             string state=Locomotion(); PresentationState=state;
             if(!animator.GetCurrentAnimatorStateInfo(0).IsName(state) &&
                 (!animator.IsInTransition(0)||!animator.GetNextAnimatorStateInfo(0).IsName(state)))
-                animator.CrossFadeInFixedTime(state,airLocomotion.State!=null?.06f:.12f,0);
+                animator.CrossFadeInFixedTime(state,dash.IsDashing?.035f:airLocomotion.State!=null?.06f:.12f,0);
             animator.Update(delta);
         }
         ApplyApprovedPose();

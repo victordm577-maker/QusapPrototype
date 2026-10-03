@@ -1872,6 +1872,32 @@ AnimatorState:
   m_MirrorParameter: PurchasedLeftPose
   m_CycleOffsetParameter: 
   m_TimeParameter: 
+--- !u!1102 &-7990218496205880085
+AnimatorState:
+  serializedVersion: 6
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: LandSoft
+  m_Speed: 4.5454545
+  m_CycleOffset: 0
+  m_Transitions: []
+  m_StateMachineBehaviours: []
+  m_Position: {x: 50, y: 50, z: 0}
+  m_IKOnFeet: 0
+  m_WriteDefaultValues: 1
+  m_Mirror: 0
+  m_SpeedParameterActive: 0
+  m_MirrorParameterActive: 0
+  m_CycleOffsetParameterActive: 0
+  m_TimeParameterActive: 0
+  m_Motion: {fileID: 2892576646274407541, guid: 8bcaf8e098e446e483ba1b5a6b2e27a5, type: 3}
+  m_Tag: 
+  m_SpeedParameter: 
+  m_MirrorParameter: 
+  m_CycleOffsetParameter: 
+  m_TimeParameter: 
 --- !u!1102 &-7976628147795521275
 AnimatorState:
   serializedVersion: 6
@@ -18525,6 +18551,15 @@ AnimatorStateMachine:
   - serializedVersion: 1
     m_State: {fileID: -2489879629831192525}
     m_Position: {x: 45365, y: 83755, z: 0}
+  - serializedVersion: 1
+    m_State: {fileID: -1012532295392562927}
+    m_Position: {x: 45400, y: 83820, z: 0}
+  - serializedVersion: 1
+    m_State: {fileID: -7990218496205880085}
+    m_Position: {x: 45435, y: 83885, z: 0}
+  - serializedVersion: 1
+    m_State: {fileID: 8077091508669929590}
+    m_Position: {x: 45470, y: 83950, z: 0}
   m_ChildStateMachines: []
   m_AnyStateTransitions: []
   m_EntryTransitions: []
@@ -19159,6 +19194,32 @@ AnimatorState:
   m_MirrorParameter: PurchasedLeftPose
   m_CycleOffsetParameter: 
   m_TimeParameter: 
+--- !u!1102 &-1012532295392562927
+AnimatorState:
+  serializedVersion: 6
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: JumpTakeoff
+  m_Speed: 3.8888893
+  m_CycleOffset: 0
+  m_Transitions: []
+  m_StateMachineBehaviours: []
+  m_Position: {x: 50, y: 50, z: 0}
+  m_IKOnFeet: 0
+  m_WriteDefaultValues: 1
+  m_Mirror: 0
+  m_SpeedParameterActive: 0
+  m_MirrorParameterActive: 0
+  m_CycleOffsetParameterActive: 0
+  m_TimeParameterActive: 0
+  m_Motion: {fileID: -7816938606450766792, guid: e9947c07d6644569a1dbb347dfa6186e, type: 3}
+  m_Tag: 
+  m_SpeedParameter: 
+  m_MirrorParameter: 
+  m_CycleOffsetParameter: 
+  m_TimeParameter: 
 --- !u!1102 &-965353910990355656
 AnimatorState:
   serializedVersion: 6
@@ -19517,7 +19578,7 @@ AnimatorState:
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
-  m_Motion: {fileID: -7816938606450766792, guid: e9947c07d6644569a1dbb347dfa6186e, type: 3}
+  m_Motion: {fileID: 3152206486128967824, guid: 46bd9248ac1c461db1082f59b8ef80e3, type: 3}
   m_Tag: 
   m_SpeedParameter: 
   m_MirrorParameter: 
@@ -35695,6 +35756,32 @@ AnimatorState:
   m_Tag: 
   m_SpeedParameter: 
   m_MirrorParameter: PurchasedLeftPose
+  m_CycleOffsetParameter: 
+  m_TimeParameter: 
+--- !u!1102 &8077091508669929590
+AnimatorState:
+  serializedVersion: 6
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: LandHard
+  m_Speed: 2.9411764
+  m_CycleOffset: 0
+  m_Transitions: []
+  m_StateMachineBehaviours: []
+  m_Position: {x: 50, y: 50, z: 0}
+  m_IKOnFeet: 0
+  m_WriteDefaultValues: 1
+  m_Mirror: 0
+  m_SpeedParameterActive: 0
+  m_MirrorParameterActive: 0
+  m_CycleOffsetParameterActive: 0
+  m_TimeParameterActive: 0
+  m_Motion: {fileID: -6865555567875306041, guid: 169eb76ff01547728a40f7f542f6a15e, type: 3}
+  m_Tag: 
+  m_SpeedParameter: 
+  m_MirrorParameter: 
   m_CycleOffsetParameter: 
   m_TimeParameter: 
 --- !u!1102 &8086799487069629623

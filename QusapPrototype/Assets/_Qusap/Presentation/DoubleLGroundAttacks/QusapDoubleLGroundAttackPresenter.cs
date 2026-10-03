@@ -26,6 +26,10 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     uint wallJumpSequence;
     float rollRemaining, landingRemaining, wallJumpRemaining;
     bool wasGrounded;
+    readonly QusapDoubleLAirLocomotion airLocomotion=new QusapDoubleLAirLocomotion();
+    public string AirPresentationState => airLocomotion.State;
+    public float LandingImpactSpeed => airLocomotion.LastImpactSpeed;
+    public uint LandingSequence => airLocomotion.LandingSequence;
     public string PresentationState { get; private set; } = "CombatIdle_B1";
     public bool IsRolling => rollRemaining > 0;
     QusapSwordHandSwitchV5 facing;
@@ -167,9 +171,9 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         if(dash.IsDashing) return ground.IsGrounded?"RunForward":"Fall";
         if(wallJumpRemaining>0) return "WallJump";
         if(vertical.IsWallSliding) return "WallSlide";
-        if(!ground.IsGrounded || body.linearVelocity.y>0) return body.linearVelocity.y>0?"JumpRise":"Fall";
+        if(!ground.IsGrounded || body.linearVelocity.y>0) return airLocomotion.State??(body.linearVelocity.y>0?"JumpRise":"Fall");
         if(rollRemaining>0) return "RollRMFrontInPlace";
-        if(landingRemaining>0 && Mathf.Abs(body.linearVelocity.x)<.1f) return "Land";
+        if(airLocomotion.State!=null) return airLocomotion.State;
         if(Mathf.Abs(body.linearVelocity.x)<.1f) return "CombatIdle_B1";
         return body.linearVelocity.x*combat.FacingDirection>=0?"RunForward":"RunBackward";
     }
@@ -196,6 +200,8 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         wasGrounded=ground.IsGrounded;
         if(vertical.WallJumpSequence!=wallJumpSequence){wallJumpSequence=vertical.WallJumpSequence;wallJumpRemaining=.14f;}
         if(dash.IsDashing || hitstun.IsInHitstun || !GroundedForPresentation)rollRemaining=0;
+        airLocomotion.Observe(delta,ground.IsGrounded,body.linearVelocity.x,body.linearVelocity.y,
+            dash.IsDashing||hitstun.IsInHitstun||combat.IsAttacking||combat.HasArmedFinisher||rollRemaining>0);
     }
     void ReturnToLocomotion()
     { clip=-1; tailRemaining=0; finisher=false; finisherCue.enabled=false; animator.CrossFadeInFixedTime(Locomotion(),.12f,0); }
@@ -249,7 +255,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
             string state=Locomotion(); PresentationState=state;
             if(!animator.GetCurrentAnimatorStateInfo(0).IsName(state) &&
                 (!animator.IsInTransition(0)||!animator.GetNextAnimatorStateInfo(0).IsName(state)))
-                animator.CrossFadeInFixedTime(state,.12f,0);
+                animator.CrossFadeInFixedTime(state,airLocomotion.State!=null?.06f:.12f,0);
             animator.Update(delta);
         }
         ApplyApprovedPose();

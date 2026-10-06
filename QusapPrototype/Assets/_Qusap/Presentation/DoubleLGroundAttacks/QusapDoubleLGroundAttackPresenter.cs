@@ -21,6 +21,10 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     QusapDashMotor dash;
     QusapVerticalMotor vertical;
     QusapHitstunController hitstun;
+    QusapHitReceiver hitReceiver;
+    bool parryAttemptPending, observingParrySuccess;
+    static readonly string[] reactionStates = { "AttackerParried", "HitstunLight", "HitstunHeavy" };
+    static readonly string[] parryStates = { "ParryAttempt", "ParrySuccess" };
     QusapInputReader input;
     QusapEquippedWeaponPresenter legacyWeaponPresentation;
     uint wallJumpSequence;
@@ -81,9 +85,11 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     {
         dash=GetComponent<QusapDashMotor>(); vertical=GetComponent<QusapVerticalMotor>();
         hitstun=GetComponent<QusapHitstunController>(); input=GetComponent<QusapInputReader>();
+        hitReceiver=GetComponent<QusapHitReceiver>();
         legacyWeaponPresentation=GetComponent<QusapEquippedWeaponPresenter>();
         wallJumpSequence=vertical.WallJumpSequence; wasGrounded=ground.IsGrounded;
         animator.applyRootMotion=false; animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;
+        animator.keepAnimatorStateOnDisable=true;
         // Explicit sampling lets the existing phase clock drive source time without
         // seeking/rebinding the skeleton on every frame. Physics advances normally.
         animator.enabled=false;
@@ -116,8 +122,119 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         cueSprite=Sprite.Create(tex,new Rect(0,0,tex.width,tex.height),Vector2.one*.5f,tex.width);
         finisherCue.sprite=cueSprite; finisherCue.color=new Color(1,.08f,.08f,1); finisherCue.sortingOrder=1001; finisherCue.enabled=false;
     }
-    void OnEnable() { combat.FinisherArmed+=Armed; combat.CombatVisualExecutionEnded+=Ended; combat.AttackVariantStarted+=Started; combat.AttackPhaseChanged+=Phased; combat.FinisherParryWindowOpened+=WindowOpened; combat.FinisherReadyToResolve+=WindowClosed; }
-    void OnDisable() { combat.FinisherArmed-=Armed; combat.CombatVisualExecutionEnded-=Ended; combat.AttackVariantStarted-=Started; combat.AttackPhaseChanged-=Phased; combat.FinisherParryWindowOpened-=WindowOpened; combat.FinisherReadyToResolve-=WindowClosed; if(finisherCue)finisherCue.enabled=false; }
+    void OnEnable()
+    {
+        combat.FinisherArmed+=Armed; combat.CombatVisualExecutionEnded+=Ended; combat.AttackVariantStarted+=Started; combat.AttackPhaseChanged+=Phased; combat.FinisherParryWindowOpened+=WindowOpened; combat.FinisherReadyToResolve+=WindowClosed;
+        combat.ParryAttemptAccepted+=ParryAttemptAccepted; combat.ParryAttemptFinished+=ParryAttemptFinished; combat.ParryFailed+=ParryFailed; combat.ParrySucceeded+=ParrySucceeded; combat.FinisherParried+=AttackerParried;
+        hitReceiver.HitReceived+=HitReceived; hitReceiver.FinisherReceived+=FinisherReceived;
+        hitstun.HitstunStarted+=HitstunStarted; hitstun.HitstunEnded+=HitstunEnded;
+        animator.SetBool("IsHitstunned",hitstun.IsInHitstun);
+        animator.SetBool("ParryAttemptActive",false);
+        animator.SetBool("ParrySuccessActive",false);
+    }
+    void OnDisable()
+    {
+        combat.FinisherArmed-=Armed; combat.CombatVisualExecutionEnded-=Ended; combat.AttackVariantStarted-=Started; combat.AttackPhaseChanged-=Phased; combat.FinisherParryWindowOpened-=WindowOpened; combat.FinisherReadyToResolve-=WindowClosed;
+        combat.ParryAttemptAccepted-=ParryAttemptAccepted; combat.ParryAttemptFinished-=ParryAttemptFinished; combat.ParryFailed-=ParryFailed; combat.ParrySucceeded-=ParrySucceeded; combat.FinisherParried-=AttackerParried;
+        hitReceiver.HitReceived-=HitReceived; hitReceiver.FinisherReceived-=FinisherReceived;
+        hitstun.HitstunStarted-=HitstunStarted; hitstun.HitstunEnded-=HitstunEnded;
+        CancelParryPresentation(); animator.SetBool("IsHitstunned",false);
+        animator.ResetTrigger("ParrySuccess"); foreach(string name in reactionStates)animator.ResetTrigger(name);
+        animator.enabled=false;
+        if(finisherCue)finisherCue.enabled=false;
+    }
+    void CancelParryAttempt()
+    { parryAttemptPending=false; animator.SetBool("ParryAttemptActive",false); }
+    void CancelParryPresentation()
+    {
+        CancelParryAttempt(); observingParrySuccess=false;
+        animator.SetBool("ParrySuccessActive",false); animator.ResetTrigger("ParrySuccess");
+    }
+    void ParryAttemptAccepted(QusapCombatCommandPress press)
+    {
+        CancelParryPresentation(); parryAttemptPending=true;
+        animator.SetBool("ParryAttemptActive",true);
+    }
+    void ParryAttemptFinished(QusapParryAttemptFeedback feedback)
+    {
+        CancelParryAttempt();
+        // Rejected presses neither accept an attempt nor extend its visual life.
+        if(feedback.Outcome==QusapParryAttemptOutcome.OnRecovery || feedback.Outcome==QusapParryAttemptOutcome.AlreadyAttempted ||
+           feedback.Outcome==QusapParryAttemptOutcome.DuplicateOrStalePressIgnored || feedback.Outcome==QusapParryAttemptOutcome.InvalidTimestampIgnored)return;
+        if(feedback.Outcome!=QusapParryAttemptOutcome.Success)CancelParryPresentation();
+    }
+    void ParryFailed(QusapParryAttemptOutcome outcome) => CancelParryPresentation();
+    void ParrySucceeded(QusapCombatController attacker,QusapComboId combo)
+    {
+        CancelParryPresentation();
+        if(hitstun.IsInHitstun)return;
+        observingParrySuccess=combat.IsParryAttemptRecovering;
+        animator.SetBool("ParrySuccessActive",observingParrySuccess);
+        animator.SetTrigger("ParrySuccess");
+    }
+    void AttackerParried(QusapComboId combo,QusapHitReceiver defender) => TriggerReaction("AttackerParried");
+    void HitstunStarted()
+    { CancelParryPresentation(); animator.SetBool("IsHitstunned",true); }
+    void HitstunEnded()
+    {
+        animator.SetBool("IsHitstunned",false);
+        foreach(string name in reactionStates)animator.ResetTrigger(name);
+    }
+    void TriggerReaction(string name)
+    {
+        // Consume the newest authoritative impact; superseded triggers must not
+        // remain queued and appear after a later recovery.
+        CancelParryPresentation();
+        foreach(string other in reactionStates)animator.ResetTrigger(other);
+        animator.SetTrigger(name);
+    }
+    void HitReceived(QusapHitInfo info)
+    {
+        // Both weapon variants expose the legacy StrongKick attack type.
+        // Their existing variant is the authoritative light/heavy distinction.
+        bool heavy=info.AttackVariant==QusapAttackVariant.WeaponStrong ||
+            (info.AttackVariant!=QusapAttackVariant.WeaponLight&&info.AttackType==QusapAttackType.StrongKick);
+        TriggerReaction(heavy?"HitstunHeavy":"HitstunLight");
+    }
+    void FinisherReceived(QusapFinisherHitInfo info) => TriggerReaction("HitstunHeavy");
+    bool SampleCombatReaction(float delta)
+    {
+        bool attemptActive=parryAttemptPending;
+        bool successActive=observingParrySuccess && combat.IsParryAttemptRecovering;
+        if(!successActive)observingParrySuccess=false;
+        animator.SetBool("ParryAttemptActive",attemptActive);
+        animator.SetBool("ParrySuccessActive",successActive);
+        animator.SetBool("IsMoving",Mathf.Abs(body.linearVelocity.x)>=.1f);
+        // Reactions use Animator's normal visual clock. Keep manual evaluation
+        // for initial entry/new signals only; evaluating again every LateUpdate
+        // would replace its normal progress. Native bools alone end reactions.
+        var previous=animator.GetCurrentAnimatorStateInfo(0);
+        var previousNext=animator.IsInTransition(0)?animator.GetNextAnimatorStateInfo(0):previous;
+        bool controlled=reactionStates.Concat(parryStates).Any(n=>previous.IsName(n)||previousNext.IsName(n));
+        bool pending=animator.GetBool("ParrySuccess")||reactionStates.Any(n=>animator.GetBool(n));
+        if(!attemptActive&&!hitstun.IsInHitstun&&!controlled&&!pending){animator.enabled=false;return false;}
+        bool startingVisualClock=!animator.enabled;
+        animator.enabled=true;
+        // A legacy scripted locomotion crossfade is not an Animator transition
+        // and cannot be interrupted by the new AnyState impact transitions.
+        // Cancel that visual blend at its current sample, then let the trigger
+        // select the reaction. No combat phase or source clock is changed.
+        if(pending&&!controlled&&animator.IsInTransition(0))
+        { animator.Play(previous.fullPathHash,0,previous.normalizedTime);animator.Update(0); }
+        if(startingVisualClock||pending)animator.Update(delta);
+        var current=animator.GetCurrentAnimatorStateInfo(0);
+        var next=animator.IsInTransition(0)?animator.GetNextAnimatorStateInfo(0):current;
+        string state=reactionStates.FirstOrDefault(n=>next.IsName(n))??parryStates.FirstOrDefault(n=>next.IsName(n));
+        if(state==null&&hitstun.IsInHitstun&&next.IsName("Hitstun"))state="Hitstun";
+        // Do not let the legacy locomotion CrossFade overwrite an impact which
+        // the graph is entering. The valid native hitstun still owns this frame.
+        if(state==null&&hitstun.IsInHitstun&&pending)state="Hitstun";
+        if(state==null){animator.enabled=false;return false;}
+        clip=-1; tailRemaining=0; finisher=false; finisherCue.enabled=false;
+        direction=combat.FacingDirection<0?-1:1;
+        PresentationState=state;
+        return true;
+    }
     void OnDestroy() { if(cueSprite)Destroy(cueSprite); }
     void WindowOpened(QusapComboId combo,QusapHitReceiver target)
     { if(finisher) { SampleFinisher(Mathf.Max(sourceTime,FinisherOpenSource)); finisherCue.enabled=true; } }
@@ -127,6 +244,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     { animator.Update(Mathf.Max(0,target-sourceTime)); sourceTime=target; ApplyApprovedPose(); }
     void Started(QusapAttackVariant variant)
     {
+        CancelParryPresentation();
         if(finisher || !GroundedForPresentation) return;
         if(variant==QusapAttackVariant.WeaponLight || variant==QusapAttackVariant.WeaponStrong)
             Begin(variant==QusapAttackVariant.WeaponLight?0:1,combat.AttackDirection,combat.CurrentAttackExecutionId);
@@ -141,6 +259,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     void Armed(QusapComboId combo,QusapHitReceiver target)
     {
+        CancelParryPresentation();
         if(!GroundedForPresentation) return;
         finisher=true; finisherStarted=UnityEngine.InputSystem.LowLevel.InputState.currentTime;
         FinisherPresentationElapsed=0;
@@ -149,6 +268,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     void Ended(QusapCombatVisualContext context)
     {
+        if(context.CancellationReason!=QusapCombatVisualCancellationReason.Completed)CancelParryPresentation();
         if(context.AttackExecutionId!=execution || clip<0) return;
         if(context.IsFinisher)
         {
@@ -162,6 +282,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     void Begin(int index,int side,ulong id)
     {
+        animator.enabled=false;
         clip=index; execution=id; direction=side<0?-1:1; sourceTime=0; tailRemaining=0; rollRemaining=0; landingRemaining=0; PresentationState="FiveAttack_"+index;
         facing.SetPreviewFacing(direction); animator.CrossFadeInFixedTime("FiveAttack_"+clip,.12f,0,0); animator.Update(0);
     }
@@ -222,6 +343,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         // while its legacy socket is hidden behind the approved visible sword.
         legacyWeaponPresentation.ApplyFacing(combat.FacingDirection);
         float delta=Time.deltaTime; ObserveLocomotion(delta);
+        if(SampleCombatReaction(delta)){ApplyApprovedPose();return;}
         if(finisher)
         {
             // Existing finisher damage resolves at the CLOSED parry window.

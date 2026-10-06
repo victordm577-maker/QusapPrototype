@@ -142,6 +142,8 @@ namespace Qusap
         public event Action<QusapComboId, QusapHitReceiver> FinisherReadyToResolve;
         public event Action<QusapCombatController, QusapComboId> ParrySucceeded;
         public event Action<QusapParryAttemptOutcome> ParryFailed;
+        // Observation only: acceptance precedes the existing synchronous result.
+        public event Action<QusapCombatCommandPress> ParryAttemptAccepted;
         public event Action<QusapParryAttemptFeedback> ParryAttemptFinished;
         public event Action<QusapFinisherResolution> FinisherResolved;
         public event Action<QusapCombatVisualContext> CombatVisualExecutionEnded;
@@ -201,6 +203,10 @@ namespace Qusap
         public QusapCombatFeedbackPresenter CombatFeedbackPresenter => combatFeedbackPresenter;
         public QusapCombatFeedbackSettings CombatFeedbackSettings => combatFeedbackSettings;
         public double ParryAttemptRecoveryDuration => parryAttemptRecoveryDuration;
+        // Presentation observes the existing gate clock; this does not admit
+        // another attempt or introduce a second recovery timer.
+        public bool IsParryAttemptRecovering =>
+            parryAttemptGate != null && parryAttemptGate.IsOnRecovery(InputState.currentTime);
         public QusapParryAttemptOutcome LastParryAttemptOutcome { get; private set; }
         public int IncomingFinisherCount
         {
@@ -1693,6 +1699,11 @@ namespace Qusap
             {
                 PublishParryAttemptFeedback(press, selected, gateResult.Outcome);
                 return;
+            }
+
+            if (eligible)
+            {
+                ParryAttemptAccepted?.Invoke(press);
             }
 
             if (!gateResult.ConsumedFinisherOpportunity || selected == null)

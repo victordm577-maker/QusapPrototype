@@ -22,7 +22,7 @@ namespace Qusap.Tests
         }
         [Test] public void SourceClipsRemainFbxAssetsWithoutAnimationEvents()
         {
-            string[] expected={"1Hand_Base_Shield_Block_Idle_1","1Hand_Base_Shield_Block_Parry_1","1Hand_Base_Shield_Block_Hit_3_InPlace","1Hand_Base_Shield_Block_Hit_1_InPlace","1Hand_Base_Shield_Block_Hit_2_InPlace"};
+            string[] expected={"1Hand_Base_Stand_Idle_B_3","1Hand_Base_Fight_End_R_1","1Hand_Base_Fight_End_R_2","1Hand_Base_Shield_Block_Hit_1_InPlace","1Hand_Base_Shield_Block_Hit_2_InPlace"};
             for(int i=0;i<Names.Length;i++)
             {
                 var state=Controller.layers[0].stateMachine.states.Single(s=>s.state.name==Names[i]).state;

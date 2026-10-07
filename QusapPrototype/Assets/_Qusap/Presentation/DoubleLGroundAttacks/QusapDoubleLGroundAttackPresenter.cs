@@ -18,6 +18,19 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     [SerializeField] GameObject visual;
     [SerializeField] Animator animator;
     [SerializeField] TextAsset approvedGrip;
+    // H2 contains sparse local rotations, not Humanoid muscles. Keep the
+    // approved clip intact; these serialized curves are copied from that asset.
+    [Serializable] public sealed class HeadbuttRotation
+    {
+        public string path;
+        public AnimationCurve x, y, z, w;
+        [NonSerialized] public Transform bone;
+    }
+    [SerializeField] AnimationClip headbuttClip;
+    [SerializeField] HeadbuttRotation[] headbuttRotations;
+    AnimationClip bodyAttackClip;
+    const int BodyAttackClip = 5, HeadbuttClip = 6;
+    bool disarmImpactPending;
     QusapDashMotor dash;
     QusapVerticalMotor vertical;
     QusapHitstunController hitstun;
@@ -27,6 +40,8 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     static readonly string[] parryStates = { "ParryAttempt", "ParrySuccess" };
     QusapInputReader input;
     QusapEquippedWeaponPresenter legacyWeaponPresentation;
+    QusapWeaponEquipment equipment;
+    Renderer[] swordRenderers;
     uint wallJumpSequence;
     float rollRemaining, landingRemaining, wallJumpRemaining;
     bool wasGrounded;
@@ -87,6 +102,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         hitstun=GetComponent<QusapHitstunController>(); input=GetComponent<QusapInputReader>();
         hitReceiver=GetComponent<QusapHitReceiver>();
         legacyWeaponPresentation=GetComponent<QusapEquippedWeaponPresenter>();
+        equipment=GetComponent<QusapWeaponEquipment>();
         wallJumpSequence=vertical.WallJumpSequence; wasGrounded=ground.IsGrounded;
         animator.applyRootMotion=false; animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;
         animator.keepAnimatorStateOnDisable=true;
@@ -94,7 +110,10 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         // seeking/rebinding the skeleton on every frame. Physics advances normally.
         animator.enabled=false;
         all=visual.GetComponentsInChildren<Transform>(true);
+        bodyAttackClip=animator.runtimeAnimatorController.animationClips.Distinct().Single(c=>c.name=="1Hand_Base_Skill_7_InPlace");
+        foreach(var track in headbuttRotations) track.bone=animator.transform.Find(track.path);
         facing=visual.GetComponent<QusapSwordHandSwitchV5>();
+        swordRenderers=facing.SwordVisual.GetComponentsInChildren<Renderer>(true);
         carry=visual.GetComponentInChildren<QusapSwordCarryLeftPoseV5>(true);
         clearance=visual.GetComponent<QusapGripMotionClearance>(); correction=visual.GetComponent<QusapFiveAttackCorrection>();
         grip=JsonUtility.FromJson<Grip>(approvedGrip.text);
@@ -174,7 +193,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     void AttackerParried(QusapComboId combo,QusapHitReceiver defender) => TriggerReaction("AttackerParried");
     void HitstunStarted()
-    { CancelParryPresentation(); animator.SetBool("IsHitstunned",true); }
+    { CancelParryPresentation(); if(clip==BodyAttackClip||clip==HeadbuttClip)ReturnToLocomotion(); animator.SetBool("IsHitstunned",true); }
     void HitstunEnded()
     {
         animator.SetBool("IsHitstunned",false);
@@ -230,21 +249,29 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         // the graph is entering. The valid native hitstun still owns this frame.
         if(state==null&&hitstun.IsInHitstun&&pending)state="Hitstun";
         if(state==null){animator.enabled=false;return false;}
-        clip=-1; tailRemaining=0; finisher=false; finisherCue.enabled=false;
+        clip=-1; tailRemaining=0; finisher=false; disarmImpactPending=false; finisherCue.enabled=false;
         direction=combat.FacingDirection<0?-1:1;
         PresentationState=state;
         return true;
     }
     void OnDestroy() { if(cueSprite)Destroy(cueSprite); }
     void WindowOpened(QusapComboId combo,QusapHitReceiver target)
-    { if(finisher) { SampleFinisher(Mathf.Max(sourceTime,FinisherOpenSource)); finisherCue.enabled=true; } }
+    { if(finisher && clip!=HeadbuttClip) { SampleFinisher(Mathf.Max(sourceTime,FinisherOpenSource)); finisherCue.enabled=true; } }
     void WindowClosed(QusapComboId combo,QusapHitReceiver target)
-    { if(finisher) { SampleFinisher(FinisherCloseSource); finisherCue.enabled=false; } }
+    { if(finisher && clip!=HeadbuttClip) { SampleFinisher(FinisherCloseSource); finisherCue.enabled=false; } }
     void SampleFinisher(float target)
     { animator.Update(Mathf.Max(0,target-sourceTime)); sourceTime=target; ApplyApprovedPose(); }
     void Started(QusapAttackVariant variant)
     {
         CancelParryPresentation();
+        if(variant==QusapAttackVariant.WeakKickGround || variant==QusapAttackVariant.WeakKickAir ||
+           variant==QusapAttackVariant.HeadbuttGround || variant==QusapAttackVariant.DiveHeadbuttAir)
+        {
+            finisher=false;
+            BeginBodyAttack(variant==QusapAttackVariant.WeakKickGround||variant==QusapAttackVariant.WeakKickAir?BodyAttackClip:HeadbuttClip,
+                combat.AttackDirection,combat.CurrentAttackExecutionId);
+            return;
+        }
         if(finisher || !GroundedForPresentation) return;
         if(variant==QusapAttackVariant.WeaponLight || variant==QusapAttackVariant.WeaponStrong)
             Begin(variant==QusapAttackVariant.WeaponLight?0:1,combat.AttackDirection,combat.CurrentAttackExecutionId);
@@ -260,16 +287,31 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     void Armed(QusapComboId combo,QusapHitReceiver target)
     {
         CancelParryPresentation();
-        if(!GroundedForPresentation) return;
+        if(combo!=QusapComboId.Disarm && !GroundedForPresentation) return;
         finisher=true; finisherStarted=UnityEngine.InputSystem.LowLevel.InputState.currentTime;
         FinisherPresentationElapsed=0;
         finisherOpened=combat.ParryWindowOpensAt; finisherClosed=combat.ParryWindowClosesAt;
-        Begin(2,combat.FacingDirection,combat.CurrentAttackExecutionId);
+        if(combo==QusapComboId.Disarm)BeginBodyAttack(HeadbuttClip,combat.FacingDirection,combat.CurrentAttackExecutionId);
+        else Begin(2,combat.FacingDirection,combat.CurrentAttackExecutionId);
     }
     void Ended(QusapCombatVisualContext context)
     {
         if(context.CancellationReason!=QusapCombatVisualCancellationReason.Completed)CancelParryPresentation();
         if(context.AttackExecutionId!=execution || clip<0) return;
+        if(clip==BodyAttackClip || clip==HeadbuttClip)
+        {
+            if(context.IsFinisher && context.ComboId==QusapComboId.Disarm &&
+               context.CancellationReason==QusapCombatVisualCancellationReason.Completed)
+            {
+                // C# resolved at the existing .45 s deadline. Show its impact
+                // once, just like B_2, without adding a recovery or gameplay lock.
+                sourceTime=(float)(finisherClosed-finisherStarted); finisher=false;
+                disarmImpactPending=true; finisherImpactFrame=Time.frameCount;
+                SampleBodyAttack();
+            }
+            else ReturnToLocomotion();
+            return;
+        }
         if(context.IsFinisher)
         {
             finisherCue.enabled=false;
@@ -283,8 +325,51 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     void Begin(int index,int side,ulong id)
     {
         animator.enabled=false;
+        disarmImpactPending=false;
         clip=index; execution=id; direction=side<0?-1:1; sourceTime=0; tailRemaining=0; rollRemaining=0; landingRemaining=0; PresentationState="FiveAttack_"+index;
         facing.SetPreviewFacing(direction); animator.CrossFadeInFixedTime("FiveAttack_"+clip,.12f,0,0); animator.Update(0);
+    }
+    void BeginBodyAttack(int index,int side,ulong id)
+    {
+        animator.enabled=false; clip=index; execution=id; direction=side<0?-1:1;
+        sourceTime=0; tailRemaining=0; rollRemaining=0; landingRemaining=0;
+        disarmImpactPending=false; finisherCue.enabled=false;
+        PresentationState=index==BodyAttackClip?"BodyAttack":"Headbutt";
+        SampleBodyAttack();
+    }
+    float BodySourceAt(QusapCombatVisualContext context)
+    {
+        var variant=combat.CurrentAttackVariant;
+        var air=combat.GetAirAttackData(variant);
+        IQusapAttackDefinition data=air??(IQusapAttackDefinition)combat.GetAttackData(
+            clip==BodyAttackClip?QusapAttackType.WeakKick:QusapAttackType.Headbutt);
+        float p=context.NormalizedProgress;
+        if(variant==QusapAttackVariant.DiveHeadbuttAir)
+        {
+            // Native dive landing/contact can shorten Active and change Recovery.
+            // Its phase progress drives anticipation/impact/recovery, never exit.
+            return context.Phase==QusapAttackPhase.Startup?Mathf.Lerp(0,.28f,p):
+                context.Phase==QusapAttackPhase.Active?Mathf.Lerp(.28f,.45f,p):
+                Mathf.Lerp(.45f,headbuttClip.length,p);
+        }
+        return context.Phase==QusapAttackPhase.Startup?data.StartupTime*p:
+            context.Phase==QusapAttackPhase.Active?data.StartupTime+data.ActiveDuration*p:
+            data.StartupTime+data.ActiveDuration+data.RecoveryTime*p;
+    }
+    void SampleBodyAttack()
+    {
+        if(clip==BodyAttackClip)
+        {
+            animator.Play("BodyAttack",0,Mathf.Clamp01(sourceTime/bodyAttackClip.length)); animator.Update(0);
+            return;
+        }
+        // Humanoid Idle provides the approved planted base. Evaluate only H2's
+        // eight transform rotations so unbound pelvis/feet are never reset.
+        animator.Play("Headbutt",0,0); animator.Update(0);
+        facing.SetPreviewFacing(direction); facing.Apply(); animator.Update(0);
+        float t=Mathf.Clamp(sourceTime,0,headbuttClip.length);
+        foreach(var track in headbuttRotations)
+            track.bone.localRotation=new Quaternion(track.x.Evaluate(t),track.y.Evaluate(t),track.z.Evaluate(t),track.w.Evaluate(t)).normalized;
     }
     // These states observe the existing providers. They never move the root,
     // consume gameplay actions, change gravity, or create attack eligibility.
@@ -336,7 +421,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
             dash.IsDashing||hitstun.IsInHitstun||combat.IsAttacking||combat.HasArmedFinisher||rollRemaining>0);
     }
     void ReturnToLocomotion()
-    { clip=-1; tailRemaining=0; finisher=false; finisherCue.enabled=false; animator.CrossFadeInFixedTime(Locomotion(),.12f,0); }
+    { clip=-1; tailRemaining=0; finisher=false; disarmImpactPending=false; finisherCue.enabled=false; animator.CrossFadeInFixedTime(Locomotion(),.12f,0); }
     void LateUpdate()
     {
         // Preserve the native drop/throw presentation reference's facing even
@@ -344,6 +429,23 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         legacyWeaponPresentation.ApplyFacing(combat.FacingDirection);
         float delta=Time.deltaTime; ObserveLocomotion(delta);
         if(SampleCombatReaction(delta)){ApplyApprovedPose();return;}
+        if(disarmImpactPending)
+        {
+            if(finisherImpactFrame==Time.frameCount){SampleBodyAttack();ApplyApprovedPose();return;}
+            ReturnToLocomotion();
+        }
+        if(clip==BodyAttackClip || clip==HeadbuttClip)
+        {
+            // Only an accepted start initializes these states. A paused or
+            // interrupted execution cannot reactivate itself from its context.
+            if(combat.TryGetCombatVisualContext(out var bodyContext) && bodyContext.AttackExecutionId==execution)
+            {
+                sourceTime=finisher?(float)(UnityEngine.InputSystem.LowLevel.InputState.currentTime-finisherStarted):
+                    Mathf.Max(sourceTime,BodySourceAt(bodyContext));
+                SampleBodyAttack();ApplyApprovedPose();return;
+            }
+            ReturnToLocomotion();
+        }
         if(finisher)
         {
             // Existing finisher damage resolves at the CLOSED parry window.
@@ -400,14 +502,17 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     float AttackWeight()
     {
-        var cur=animator.GetCurrentAnimatorStateInfo(0); float a=Enumerable.Range(0,5).Any(i=>cur.IsName("FiveAttack_"+i))?1:0;
+        var cur=animator.GetCurrentAnimatorStateInfo(0); float a=cur.IsName("BodyAttack")||cur.IsName("Headbutt")||Enumerable.Range(0,5).Any(i=>cur.IsName("FiveAttack_"+i))?1:0;
         if(!animator.IsInTransition(0)) return a;
-        var next=animator.GetNextAnimatorStateInfo(0); float b=Enumerable.Range(0,5).Any(i=>next.IsName("FiveAttack_"+i))?1:0;
+        var next=animator.GetNextAnimatorStateInfo(0); float b=next.IsName("BodyAttack")||next.IsName("Headbutt")||Enumerable.Range(0,5).Any(i=>next.IsName("FiveAttack_"+i))?1:0;
         return Mathf.Lerp(a,b,Mathf.Clamp01(animator.GetAnimatorTransitionInfo(0).normalizedTime));
     }
     void ApplyApprovedPose()
     {
         facing.SetPreviewFacing(direction); animator.SetBool("PurchasedLeftPose",false); facing.Apply();
+        // The native inventory already owns disarm/drop/equip. Its result must
+        // also retire the approved equipped visual, without changing the sword.
+        foreach(var renderer in swordRenderers)renderer.enabled=equipment==null||equipment.HasWeapon;
         float weight=AttackWeight(); var rq=rightArm.Select(t=>t.localRotation).ToArray();
         carry?.SendMessage("LateUpdate",SendMessageOptions.DontRequireReceiver);
         if(direction<0 && weight>0) for(int j=0;j<4;j++)
@@ -419,7 +524,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
             { enabled=false; throw new InvalidOperationException("STOP: approved P1 socket changed."); }
             foreach(var bone in p.bones) all.Single(t=>t.name==bone.name).localRotation=bone.rotation;
         }
-        clearance?.Evaluate(); if(clip>=0) correction?.Evaluate(clip,direction,sourceTime/SourceLength,weight);
+        clearance?.Evaluate(); if(clip>=0&&clip<5) correction?.Evaluate(clip,direction,sourceTime/SourceLength,weight);
         // These components are evaluated only above, once after Animator sampling.
         foreach(var component in visual.GetComponentsInChildren<MonoBehaviour>(true)) component.enabled=false;
     }

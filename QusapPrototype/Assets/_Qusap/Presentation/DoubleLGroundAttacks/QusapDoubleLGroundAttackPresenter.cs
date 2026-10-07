@@ -7,7 +7,7 @@ using UnityEngine;
 // Combat remains the sole authority for phases, parry, cancellation and damage.
 // The grip, arm mapping, carry and corrections below reuse the approved review.
 [DefaultExecutionOrder(150)]
-public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
+public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour, IQusapImpactVisualSource
 {
     [Serializable] public sealed class BonePose { public string name; public Quaternion rotation; }
     [Serializable] public sealed class Pose { public string name; public Vector3 socketLocalPosition; public Quaternion socketLocalRotation; public BonePose[] bones; }
@@ -92,6 +92,25 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     public float SourceTime => sourceTime;
     public int PresentationDirection => direction;
     public GameObject Visual => visual;
+    public Transform ImpactVisualRoot => visual != null ? visual.transform : null;
+    public Transform ImpactSword => facing != null ? facing.SwordVisual : null;
+    public bool IsImpactSwordWindowActive
+    {
+        get
+        {
+            if (!isActiveAndEnabled || equipment == null || !equipment.HasWeapon ||
+                dash.IsDashing || hitstun.IsInHitstun || IsRolling) return false;
+            // A finisher's legacy visual-context phase subdivides its parry
+            // telegraph. Its approved source clock identifies the actual swing.
+            if (finisher && (clip == 2 || clip == LaunchFinisherClip))
+            {
+                float contact = clip == LaunchFinisherClip ? LaunchImpactSource : ReferenceImpact(2);
+                return combat.HasArmedFinisher && sourceTime >= contact - .2f && sourceTime < contact;
+            }
+            return (clip == 0 || clip == 1 || clip == 3 || clip == 4) &&
+                combat.TryGetCombatVisualContext(out var context) && context.Phase == QusapAttackPhase.Active;
+        }
+    }
     public Animator Animator => animator;
     public QusapSwordHandSwitchV5 Facing => facing;
     public static float ReferenceImpact(int index) => index == 0 ? .5f : index == 1 ? 23f/30f : 28f/30f;

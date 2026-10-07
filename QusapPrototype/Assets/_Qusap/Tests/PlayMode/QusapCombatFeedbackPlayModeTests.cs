@@ -60,8 +60,10 @@ namespace Qusap.Tests
             PlayerHarness target = CreatePlayer("Target");
             attacker.Resolve(QusapComboId.Damage, target);
 
-            Vector3 expected = target.Root.transform.position
-                + attacker.Combat.CombatFeedbackSettings.TargetOffset;
+            var definition = attacker.Combat.GetFinisherDefinition(QusapComboId.Damage);
+            Vector3 probe = attacker.Root.transform.TransformPoint(new Vector3(
+                definition.HitboxOffset.x * attacker.Combat.FacingDirection, definition.HitboxOffset.y, 0));
+            Vector3 expected = QusapCombatFeedbackPresenter.ContactOnTarget(target.Receiver, probe);
             Assert.That(attacker.Presenter.LastFeedback.Value.WorldPosition, Is.EqualTo(expected));
             Assert.That(ActiveObject(attacker.Presenter).transform.position, Is.EqualTo(expected));
         }
@@ -265,7 +267,8 @@ namespace Qusap.Tests
             pair.Defender.Parry(pair.WindowMidpoint);
             pair.Defender.ProcessFixed();
 
-            Assert.That(pair.Defender.Presenter.TotalFeedbackCount, Is.EqualTo(feedbackBefore));
+            Assert.That(pair.Defender.Presenter.TotalFeedbackCount, Is.EqualTo(feedbackBefore + 1));
+            Assert.That(pair.Defender.Presenter.LastFeedback.Value.FeedbackType, Is.EqualTo(QusapCombatFeedbackType.ParrySucceeded));
             Assert.That(pair.Defender.CuePresenter.SuccessFlashCount, Is.EqualTo(greenBefore + 1));
         }
 

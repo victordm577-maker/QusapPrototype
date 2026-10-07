@@ -31,6 +31,65 @@ namespace Qusap
         private int reactionDirection = 1;
         private bool visualIsReacting;
         private bool missingVisualWarningIssued;
+        private bool impactOnly;
+        private double impactFlashEnds;
+        private float impactFlashDuration, impactFlashIntensity;
+        private Color impactFlashColor;
+        public bool IsImpactFlashActive => impactOnly && visualIsReacting;
+
+        // Reuse the existing MPB flash without enabling the retired tilt/squash.
+        public void ConfigureImpactOnly(Transform visual)
+        {
+            if (impactOnly) return;
+            impactOnly = true;
+            playerVisual = visual;
+            renderers = visual.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            CaptureOriginalPropertyBlocks();
+            enabled = true;
+        }
+
+        public void PlayImpactFlash(QusapCombatImpactProfile profile)
+        {
+            if (!impactOnly || !isActiveAndEnabled) return;
+            if (!visualIsReacting) CaptureOriginalPropertyBlocks();
+            impactFlashDuration = profile.FlashDuration;
+            impactFlashEnds = Time.unscaledTimeAsDouble + impactFlashDuration;
+            impactFlashIntensity = profile.FlashIntensity;
+            impactFlashColor = profile.Color;
+            visualIsReacting = true;
+            RefreshImpactFlash(Time.unscaledTimeAsDouble);
+        }
+
+        public void RefreshImpactFlash(double now)
+        {
+            if (!impactOnly || !visualIsReacting) return;
+            if (now >= impactFlashEnds)
+            {
+                RestoreVisual(); visualIsReacting = false; return;
+            }
+            float fade = Mathf.Clamp01((float)((impactFlashEnds - now) / impactFlashDuration));
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null || renderer.sharedMaterial == null) continue;
+                renderer.GetPropertyBlock(reactionPropertyBlock);
+                foreach (int property in new[] { BaseColorProperty, ColorProperty })
+                {
+                    if (!renderer.sharedMaterial.HasProperty(property)) continue;
+                    Color original = originalPropertyBlocks[i].HasProperty(property)
+                        ? originalPropertyBlocks[i].GetColor(property) : renderer.sharedMaterial.GetColor(property);
+                    reactionPropertyBlock.SetColor(property, Color.Lerp(original, impactFlashColor, fade * impactFlashIntensity));
+                }
+                renderer.SetPropertyBlock(reactionPropertyBlock);
+                reactionPropertyBlock.Clear();
+            }
+        }
+
+        public void ResetImpactFlash()
+        {
+            if (!impactOnly || !visualIsReacting) return;
+            RestoreVisual(); visualIsReacting = false;
+        }
 
         private void Awake()
         {
@@ -80,7 +139,7 @@ namespace Qusap
                 hitReceiver.HitReceived -= HandleHitReceived;
             }
 
-            RestoreVisual();
+            if (!impactOnly || visualIsReacting) RestoreVisual();
             reactionTimeRemaining = 0f;
             visualIsReacting = false;
         }
@@ -97,6 +156,7 @@ namespace Qusap
 
         private void LateUpdate()
         {
+            if (impactOnly) { RefreshImpactFlash(Time.unscaledTimeAsDouble); return; }
             if (playerVisual == null)
             {
                 return;
@@ -144,6 +204,7 @@ namespace Qusap
 
         private void HandleHitReceived(QusapHitInfo hitInfo)
         {
+            if (impactOnly) return;
             reactionDirection = hitInfo.HorizontalDirection < 0 ? -1 : 1;
             reactionTimeRemaining = reactionDuration;
             visualIsReacting = true;
@@ -232,13 +293,14 @@ namespace Qusap
                 return;
             }
 
-            float currentFacingYaw = playerVisual.localEulerAngles.y;
-            playerVisual.localPosition = originalLocalPosition;
-            playerVisual.localScale = originalLocalScale;
-            playerVisual.localRotation = Quaternion.Euler(
-                originalLocalEulerAngles.x,
-                currentFacingYaw,
-                originalLocalEulerAngles.z);
+            if (!impactOnly)
+            {
+                float currentFacingYaw = playerVisual.localEulerAngles.y;
+                playerVisual.localPosition = originalLocalPosition;
+                playerVisual.localScale = originalLocalScale;
+                playerVisual.localRotation = Quaternion.Euler(
+                    originalLocalEulerAngles.x, currentFacingYaw, originalLocalEulerAngles.z);
+            }
 
             if (renderers == null || originalPropertyBlocks == null)
             {

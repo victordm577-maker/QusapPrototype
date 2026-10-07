@@ -12,7 +12,9 @@ namespace Qusap
         Whiff,
         Rejected,
         ParryFailed,
-        ParrySucceeded
+        ParrySucceeded,
+        Light,
+        Heavy
     }
 
     public readonly struct QusapCombatFeedbackEvent

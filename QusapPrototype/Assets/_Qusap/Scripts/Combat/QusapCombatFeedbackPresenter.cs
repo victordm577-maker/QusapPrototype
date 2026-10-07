@@ -19,6 +19,15 @@ namespace Qusap
         private bool subscribed;
         private bool hasVisualTimestamp;
         private double lastVisualTimestamp;
+        private IQusapImpactVisualSource impactVisual;
+        private QusapHitReceiver hitReceiver;
+        private QusapHitReactionVisual impactFlash;
+        private QusapSwordImpactTrail impactTrail;
+        private QusapCombatImpactWorld impactWorld;
+        public bool ImpactFeedbackEnabled { get; private set; } = true;
+        public int ConfirmedImpactCount { get; private set; }
+        public QusapCombatFeedbackType LastImpactType { get; private set; }
+        public QusapSwordImpactTrail ImpactTrail => impactTrail;
 
         public int PoolCapacity => pool.Count;
         public int ActiveEffectCount
@@ -81,7 +90,88 @@ namespace Qusap
 
         private void Update()
         {
+            if (impactTrail != null) impactTrail.FeedbackEnabled = ImpactFeedbackEnabled && CanShowFeedback();
             Refresh(Time.unscaledTimeAsDouble);
+        }
+
+        private void Start()
+        {
+            foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
+                if (component is IQusapImpactVisualSource source) { impactVisual = source; break; }
+            if (impactVisual?.ImpactVisualRoot == null) return;
+            impactFlash = GetComponent<QusapHitReactionVisual>();
+            if (impactFlash != null) impactFlash.ConfigureImpactOnly(impactVisual.ImpactVisualRoot);
+            impactTrail = GetComponent<QusapSwordImpactTrail>();
+            if (impactTrail == null) impactTrail = gameObject.AddComponent<QusapSwordImpactTrail>();
+            impactTrail.Initialize(impactVisual);
+            impactTrail.FeedbackEnabled = ImpactFeedbackEnabled;
+            impactWorld = QusapCombatImpactWorld.GetOrCreate();
+        }
+
+        public void SetImpactFeedbackEnabled(bool active)
+        {
+            ImpactFeedbackEnabled = active;
+            if (impactTrail != null) { impactTrail.FeedbackEnabled = active; impactTrail.Refresh(); }
+            if (!active) { impactFlash?.ResetImpactFlash(); impactWorld?.Release(impactVisual?.ImpactVisualRoot); }
+        }
+
+        private void HandleReceivedImpact(QusapHitInfo hit)
+        {
+            if (!ImpactFeedbackEnabled || !CanShowFeedback()) return;
+            QusapCombatFeedbackType type = hit.AttackVariant == QusapAttackVariant.WeaponStrong ||
+                hit.AttackVariant == QusapAttackVariant.HeadbuttGround || hit.AttackVariant == QusapAttackVariant.DiveHeadbuttAir
+                ? QusapCombatFeedbackType.Heavy : QusapCombatFeedbackType.Light;
+            Vector3 contact = ContactOnTarget(hitReceiver, hit.HitboxCenter);
+            Show(new QusapCombatFeedbackEvent(type, hit.Source, hitReceiver, null, contact,
+                Time.unscaledTimeAsDouble, null, null));
+            ApplyImpact(type, hit.Source);
+        }
+
+        private void HandleReceivedFinisher(QusapFinisherHitInfo hit)
+        {
+            if (!ImpactFeedbackEnabled || !CanShowFeedback()) return;
+            // The attacker's FinisherResolved already owns the single pooled
+            // finisher effect. Receiver only drives flash/pose hold/shake.
+            ApplyImpact(hit.ComboId == QusapComboId.Launch ? QusapCombatFeedbackType.Launch :
+                hit.ComboId == QusapComboId.Disarm ? QusapCombatFeedbackType.Disarm : QusapCombatFeedbackType.Damage, hit.Source);
+        }
+
+        private void HandleImpactParry(QusapCombatController attacker, QusapComboId combo)
+        {
+            if (!ImpactFeedbackEnabled || !CanShowFeedback()) return;
+            Vector3 contact = FinisherContact(attacker, hitReceiver, combo);
+            Show(new QusapCombatFeedbackEvent(QusapCombatFeedbackType.ParrySucceeded, attacker, hitReceiver,
+                combo, contact, Time.unscaledTimeAsDouble, null, QusapParryAttemptOutcome.Success));
+            ApplyImpact(QusapCombatFeedbackType.ParrySucceeded, attacker);
+        }
+
+        private void ApplyImpact(QusapCombatFeedbackType type, QusapCombatController attacker)
+        {
+            ConfirmedImpactCount++; LastImpactType = type;
+            QusapCombatImpactProfile profile = QusapCombatImpactProfile.For(type);
+            impactFlash?.PlayImpactFlash(profile);
+            if (impactWorld == null) return;
+            impactWorld.Request(impactVisual?.ImpactVisualRoot, profile);
+            if (attacker != null)
+                foreach (MonoBehaviour component in attacker.GetComponents<MonoBehaviour>())
+                    if (component is IQusapImpactVisualSource source) { impactWorld.Request(source.ImpactVisualRoot, profile); break; }
+        }
+
+        internal static Vector3 ContactOnTarget(QusapHitReceiver target, Vector3 probe)
+        {
+            if (target == null) return probe;
+            Collider hurtbox = target.GetComponentInChildren<QusapHurtbox>()?.GetComponent<Collider>();
+            if (hurtbox == null) hurtbox = target.GetComponent<Collider>();
+            return hurtbox != null ? hurtbox.ClosestPoint(probe) : target.transform.position + QusapCombatFeedbackSettings.DefaultTargetOffset;
+        }
+
+        private static Vector3 FinisherContact(QusapCombatController attacker, QusapHitReceiver target, QusapComboId combo)
+        {
+            if (attacker == null) return target != null ? target.transform.position : Vector3.zero;
+            var definition = attacker.GetFinisherDefinition(combo);
+            Vector2 offset = definition.HitboxOffset;
+            Vector3 probe = attacker.transform.TransformPoint(new Vector3(offset.x * attacker.FacingDirection, offset.y, 0));
+            return ContactOnTarget(target, probe);
         }
 
         internal void Initialize(
@@ -173,6 +263,9 @@ namespace Qusap
 
         internal void ResetPresentation()
         {
+            impactFlash?.ResetImpactFlash();
+            impactWorld?.Release(impactVisual?.ImpactVisualRoot);
+            if (impactTrail != null) { impactTrail.FeedbackEnabled = false; impactTrail.Refresh(); }
             for (int i = 0; i < pool.Count; i++)
             {
                 HideSlot(pool[i]);
@@ -232,7 +325,7 @@ namespace Qusap
                 || resolution.ExpectedTarget == null;
             Vector3 worldPosition = onAttacker
                 ? combatController.transform.position + settings.AttackerOffset
-                : resolution.ExpectedTarget.transform.position + settings.TargetOffset;
+                : FinisherContact(combatController, resolution.ExpectedTarget, resolution.ComboId);
             double timestamp = Time.unscaledTimeAsDouble;
             QusapCombatFeedbackEvent feedbackEvent = new(
                 feedbackType,
@@ -336,6 +429,14 @@ namespace Qusap
 
             switch (feedbackEvent.FeedbackType)
             {
+                case QusapCombatFeedbackType.Light:
+                case QusapCombatFeedbackType.Heavy:
+                case QusapCombatFeedbackType.ParrySucceeded:
+                    var profile = QusapCombatImpactProfile.For(feedbackEvent.FeedbackType);
+                    duration = profile.FlashDuration + .06f;
+                    maximumScale = Vector3.one * (feedbackEvent.FeedbackType == QusapCombatFeedbackType.Light ? .30f : .50f);
+                    primaryColor = profile.Color; secondaryColor = Color.white; showSecondary = true;
+                    break;
                 case QusapCombatFeedbackType.Damage:
                     duration = settings.DamageDuration;
                     maximumScale = Vector3.one * settings.DamageMaximumSize;
@@ -428,8 +529,13 @@ namespace Qusap
                 return;
             }
 
+            if (impactTrail != null) impactTrail.FeedbackEnabled = ImpactFeedbackEnabled;
+
             combatController.FinisherResolved += HandleFinisherResolved;
             combatController.ParryAttemptFinished += HandleParryAttemptFinished;
+            combatController.ParrySucceeded += HandleImpactParry;
+            hitReceiver = combatController.HitReceiver;
+            if (hitReceiver != null) { hitReceiver.HitReceived += HandleReceivedImpact; hitReceiver.FinisherReceived += HandleReceivedFinisher; }
             subscribed = true;
         }
 
@@ -442,6 +548,8 @@ namespace Qusap
 
             combatController.FinisherResolved -= HandleFinisherResolved;
             combatController.ParryAttemptFinished -= HandleParryAttemptFinished;
+            combatController.ParrySucceeded -= HandleImpactParry;
+            if (hitReceiver != null) { hitReceiver.HitReceived -= HandleReceivedImpact; hitReceiver.FinisherReceived -= HandleReceivedFinisher; }
             subscribed = false;
         }
 

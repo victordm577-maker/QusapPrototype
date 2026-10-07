@@ -28,8 +28,15 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     [SerializeField] AnimationClip headbuttClip;
     [SerializeField] HeadbuttRotation[] headbuttRotations;
-    AnimationClip bodyAttackClip;
+    AnimationClip bodyAttackClip, launchFinisherClip;
     const int BodyAttackClip = 5, HeadbuttClip = 6;
+    public const int LaunchFinisherClip = 7;
+    public const string LaunchFinisherState = "LaunchFinisherE2";
+    public const float LaunchImpactSource = .5f;
+    // Approved E2 contact at source .50 s follows the existing C# deadline.
+    // This conversion is presentation only; no Animator timer resolves combat.
+    public static float LaunchSourceAt(double now, double started, double closed) =>
+        Mathf.Lerp(0, LaunchImpactSource, Mathf.Clamp01((float)((now-started)/(closed-started))));
     bool disarmImpactPending;
     QusapDashMotor dash;
     QusapVerticalMotor vertical;
@@ -111,6 +118,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         animator.enabled=false;
         all=visual.GetComponentsInChildren<Transform>(true);
         bodyAttackClip=animator.runtimeAnimatorController.animationClips.Distinct().Single(c=>c.name=="1Hand_Base_Skill_7_InPlace");
+        launchFinisherClip=animator.runtimeAnimatorController.animationClips.Distinct().Single(c=>c.name=="1Hand_Base_Attack_E_2_InPlace");
         foreach(var track in headbuttRotations) track.bone=animator.transform.Find(track.path);
         facing=visual.GetComponent<QusapSwordHandSwitchV5>();
         swordRenderers=facing.SwordVisual.GetComponentsInChildren<Renderer>(true);
@@ -193,7 +201,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     void AttackerParried(QusapComboId combo,QusapHitReceiver defender) => TriggerReaction("AttackerParried");
     void HitstunStarted()
-    { CancelParryPresentation(); if(clip==BodyAttackClip||clip==HeadbuttClip)ReturnToLocomotion(); animator.SetBool("IsHitstunned",true); }
+    { CancelParryPresentation(); if(clip==BodyAttackClip||clip==HeadbuttClip||clip==LaunchFinisherClip)ReturnToLocomotion(); animator.SetBool("IsHitstunned",true); }
     void HitstunEnded()
     {
         animator.SetBool("IsHitstunned",false);
@@ -256,9 +264,9 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     void OnDestroy() { if(cueSprite)Destroy(cueSprite); }
     void WindowOpened(QusapComboId combo,QusapHitReceiver target)
-    { if(finisher && clip!=HeadbuttClip) { SampleFinisher(Mathf.Max(sourceTime,FinisherOpenSource)); finisherCue.enabled=true; } }
+    { if(finisher && clip==2) { SampleFinisher(Mathf.Max(sourceTime,FinisherOpenSource)); finisherCue.enabled=true; } }
     void WindowClosed(QusapComboId combo,QusapHitReceiver target)
-    { if(finisher && clip!=HeadbuttClip) { SampleFinisher(FinisherCloseSource); finisherCue.enabled=false; } }
+    { if(finisher && clip==2) { SampleFinisher(FinisherCloseSource); finisherCue.enabled=false; } }
     void SampleFinisher(float target)
     { animator.Update(Mathf.Max(0,target-sourceTime)); sourceTime=target; ApplyApprovedPose(); }
     void Started(QusapAttackVariant variant)
@@ -292,12 +300,26 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         FinisherPresentationElapsed=0;
         finisherOpened=combat.ParryWindowOpensAt; finisherClosed=combat.ParryWindowClosesAt;
         if(combo==QusapComboId.Disarm)BeginBodyAttack(HeadbuttClip,combat.FacingDirection,combat.CurrentAttackExecutionId);
+        else if(combo==QusapComboId.Launch)BeginLaunch(combat.FacingDirection,combat.CurrentAttackExecutionId);
         else Begin(2,combat.FacingDirection,combat.CurrentAttackExecutionId);
     }
     void Ended(QusapCombatVisualContext context)
     {
         if(context.CancellationReason!=QusapCombatVisualCancellationReason.Completed)CancelParryPresentation();
         if(context.AttackExecutionId!=execution || clip<0) return;
+        if(clip==LaunchFinisherClip)
+        {
+            finisher=false;
+            if(context.IsFinisher && context.ComboId==QusapComboId.Launch &&
+               context.CancellationReason==QusapCombatVisualCancellationReason.Completed)
+            {
+                FinisherPresentationElapsed=finisherClosed-finisherStarted;
+                SampleLaunch(LaunchImpactSource);
+                tailRemaining=VisualTail; finisherImpactFrame=Time.frameCount;
+            }
+            else ReturnToLocomotion();
+            return;
+        }
         if(clip==BodyAttackClip || clip==HeadbuttClip)
         {
             if(context.IsFinisher && context.ComboId==QusapComboId.Disarm &&
@@ -328,6 +350,22 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         disarmImpactPending=false;
         clip=index; execution=id; direction=side<0?-1:1; sourceTime=0; tailRemaining=0; rollRemaining=0; landingRemaining=0; PresentationState="FiveAttack_"+index;
         facing.SetPreviewFacing(direction); animator.CrossFadeInFixedTime("FiveAttack_"+clip,.12f,0,0); animator.Update(0);
+    }
+    void BeginLaunch(int side,ulong id)
+    {
+        animator.enabled=false; clip=LaunchFinisherClip; execution=id; direction=side<0?-1:1;
+        sourceTime=0; tailRemaining=0; rollRemaining=0; landingRemaining=0;
+        disarmImpactPending=false; finisherCue.enabled=false;
+        PresentationState=LaunchFinisherState;
+        // Play at zero restarts even when a new execution interrupts E2's tail.
+        // The existing presenter selects the state directly, without parameters.
+        SampleLaunch(0);
+    }
+    void SampleLaunch(float target)
+    {
+        sourceTime=target;
+        animator.Play(LaunchFinisherState,0,Mathf.Min(.99999f,target/launchFinisherClip.length));
+        animator.Update(0); ApplyApprovedPose();
     }
     void BeginBodyAttack(int index,int side,ulong id)
     {
@@ -429,6 +467,30 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
         legacyWeaponPresentation.ApplyFacing(combat.FacingDirection);
         float delta=Time.deltaTime; ObserveLocomotion(delta);
         if(SampleCombatReaction(delta)){ApplyApprovedPose();return;}
+        if(clip==LaunchFinisherClip)
+        {
+            if(finisher)
+            {
+                double now=UnityEngine.InputSystem.LowLevel.InputState.currentTime;
+                FinisherPresentationElapsed=now-finisherStarted;
+                // Hold the preceding approved sample until C# actually resolves
+                // on its next physics tick; contact is sampled by Ended above.
+                SampleLaunch(Mathf.Min(LaunchImpactSource-1f/120f,
+                    LaunchSourceAt(now,finisherStarted,finisherClosed)));
+                return;
+            }
+            if(tailRemaining>0 && !combat.IsAttacking && !dash.IsDashing && GroundedForPresentation)
+            {
+                if(finisherImpactFrame!=Time.frameCount)
+                {
+                    tailRemaining=Mathf.Max(0,tailRemaining-delta);
+                    FinisherPresentationElapsed=finisherClosed-finisherStarted+VisualTail-tailRemaining;
+                    SampleLaunch(Mathf.Lerp(LaunchImpactSource,launchFinisherClip.length,1-tailRemaining/VisualTail));
+                }
+                if(tailRemaining>0)return;
+            }
+            ReturnToLocomotion();
+        }
         if(disarmImpactPending)
         {
             if(finisherImpactFrame==Time.frameCount){SampleBodyAttack();ApplyApprovedPose();return;}
@@ -502,9 +564,9 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour
     }
     float AttackWeight()
     {
-        var cur=animator.GetCurrentAnimatorStateInfo(0); float a=cur.IsName("BodyAttack")||cur.IsName("Headbutt")||Enumerable.Range(0,5).Any(i=>cur.IsName("FiveAttack_"+i))?1:0;
+        var cur=animator.GetCurrentAnimatorStateInfo(0); float a=cur.IsName(LaunchFinisherState)||cur.IsName("BodyAttack")||cur.IsName("Headbutt")||Enumerable.Range(0,5).Any(i=>cur.IsName("FiveAttack_"+i))?1:0;
         if(!animator.IsInTransition(0)) return a;
-        var next=animator.GetNextAnimatorStateInfo(0); float b=next.IsName("BodyAttack")||next.IsName("Headbutt")||Enumerable.Range(0,5).Any(i=>next.IsName("FiveAttack_"+i))?1:0;
+        var next=animator.GetNextAnimatorStateInfo(0); float b=next.IsName(LaunchFinisherState)||next.IsName("BodyAttack")||next.IsName("Headbutt")||Enumerable.Range(0,5).Any(i=>next.IsName("FiveAttack_"+i))?1:0;
         return Mathf.Lerp(a,b,Mathf.Clamp01(animator.GetAnimatorTransitionInfo(0).normalizedTime));
     }
     void ApplyApprovedPose()

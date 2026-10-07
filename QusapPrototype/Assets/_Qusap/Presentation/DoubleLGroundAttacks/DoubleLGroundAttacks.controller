@@ -12292,6 +12292,32 @@ AnimatorState:
   m_MirrorParameter: PurchasedLeftPose
   m_CycleOffsetParameter: 
   m_TimeParameter: 
+--- !u!1102 &-2790184214299398984
+AnimatorState:
+  serializedVersion: 6
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: LaunchFinisherE2
+  m_Speed: 1
+  m_CycleOffset: 0
+  m_Transitions: []
+  m_StateMachineBehaviours: []
+  m_Position: {x: 50, y: 50, z: 0}
+  m_IKOnFeet: 0
+  m_WriteDefaultValues: 1
+  m_Mirror: 0
+  m_SpeedParameterActive: 0
+  m_MirrorParameterActive: 0
+  m_CycleOffsetParameterActive: 0
+  m_TimeParameterActive: 0
+  m_Motion: {fileID: -8621180566367207882, guid: c5194c71668c46ac95496b4fb8e36822, type: 3}
+  m_Tag:
+  m_SpeedParameter:
+  m_MirrorParameter:
+  m_CycleOffsetParameter:
+  m_TimeParameter:
 --- !u!1102 &-2778077300182936122
 AnimatorState:
   serializedVersion: 6
@@ -18932,6 +18958,9 @@ AnimatorStateMachine:
   - serializedVersion: 1
     m_State: {fileID: -755916788936543149}
     m_Position: {x: 45785, y: 84535, z: 0}
+  - serializedVersion: 1
+    m_State: {fileID: -2790184214299398984}
+    m_Position: {x: 950, y: 600, z: 0}
   m_ChildStateMachines: []
   m_AnyStateTransitions:
   - {fileID: -8992195258838942733}

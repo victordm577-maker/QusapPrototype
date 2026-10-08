@@ -1,7 +1,10 @@
+using System;
 using UnityEngine;
 
 namespace Qusap
 {
+    public enum QusapRecoveryCause { TechnicalRecovery, NewSession }
+
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(QusapDashMotor))]
     public class QusapRespawnController : MonoBehaviour
@@ -16,6 +19,7 @@ namespace Qusap
         private QusapHitReceiver hitReceiver;
         private Vector3 initialPosition;
         private Quaternion initialRotation;
+        public event Action<QusapRecoveryCause> RecoveryCompleted;
 
         private void Awake()
         {
@@ -32,16 +36,33 @@ namespace Qusap
         {
             if (rb.position.y < fallLimitY)
             {
-                Respawn();
+                TechnicalRecovery();
             }
         }
 
         public void Respawn()
         {
+            // Compatibility entry point: recovery within a session never heals.
+            TechnicalRecovery();
+        }
+
+        public void TechnicalRecovery()
+        {
+            if (hitReceiver != null && hitReceiver.IsHealthDepleted) return;
+            Recover(QusapRecoveryCause.TechnicalRecovery);
+        }
+
+        public void ResetForNewSession()
+        {
+            hitReceiver?.ResetForNewSession();
+            Recover(QusapRecoveryCause.NewSession);
+        }
+
+        private void Recover(QusapRecoveryCause cause)
+        {
             hitstunController?.ResetHitstun();
             dashMotor?.ResetDashState();
             combatController?.ResetCombatState();
-            hitReceiver?.ResetDamage();
 
             Vector3 respawnPosition = optionalRespawnPoint != null
                 ? optionalRespawnPoint.position
@@ -55,6 +76,7 @@ namespace Qusap
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
             rb.WakeUp();
+            RecoveryCompleted?.Invoke(cause);
         }
     }
 }

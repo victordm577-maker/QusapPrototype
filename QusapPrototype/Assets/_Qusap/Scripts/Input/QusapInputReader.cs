@@ -38,10 +38,12 @@ namespace Qusap
         private bool strongKickPressed;
         private bool headbuttPressed;
         private bool gameplayInputBlocked;
+        private bool externalGameplayInputBlocked;
+        public bool IsGameplayInputBlocked => gameplayInputBlocked || externalGameplayInputBlocked;
 
         public event Action<QusapCombatCommandPress> ParryPressed;
 
-        public float HorizontalValue => gameplayInputBlocked ? 0f : horizontalValue;
+        public float HorizontalValue => IsGameplayInputBlocked ? 0f : horizontalValue;
         public QusapLocalPlayerSlot LocalPlayerSlot => localPlayerSlot;
         public int PendingCombatCommandCount => combatCommandBuffer?.PendingCount ?? 0;
         public bool HasPendingWeaponSwapThrow =>
@@ -306,7 +308,7 @@ namespace Qusap
 
         public bool TryConsumeCombatCommand(out QusapCombatCommandPress press)
         {
-            if (gameplayInputBlocked || combatCommandBuffer == null)
+            if (IsGameplayInputBlocked || combatCommandBuffer == null)
             {
                 press = default;
                 return false;
@@ -317,7 +319,7 @@ namespace Qusap
 
         public bool TryConsumeWeaponSwapThrow(out QusapWeaponSwapThrowPress press)
         {
-            if (gameplayInputBlocked
+            if (IsGameplayInputBlocked
                 || !isActiveAndEnabled
                 || weaponSwapThrowInputBuffer == null)
             {
@@ -337,7 +339,7 @@ namespace Qusap
             QusapCombatCommand command,
             double timestamp)
         {
-            if (gameplayInputBlocked || combatCommandBuffer == null)
+            if (IsGameplayInputBlocked || combatCommandBuffer == null)
             {
                 return default;
             }
@@ -366,6 +368,13 @@ namespace Qusap
         {
             gameplayInputBlocked = blocked;
             horizontalValue = blocked ? 0f : horizontalValue;
+            ClearBufferedActions();
+        }
+
+        public void SetExternalGameplayInputBlocked(bool blocked)
+        {
+            externalGameplayInputBlocked = blocked;
+            if (blocked) horizontalValue = 0f;
             ClearBufferedActions();
         }
 
@@ -409,32 +418,32 @@ namespace Qusap
         {
             bool wasBuffered = bufferedAction;
             bufferedAction = false;
-            return wasBuffered && !gameplayInputBlocked;
+            return wasBuffered && !IsGameplayInputBlocked;
         }
 
         private void HandleJumpPerformed(InputAction.CallbackContext context)
         {
-            jumpPressed = true;
+            if (!IsGameplayInputBlocked) jumpPressed = true;
         }
 
         private void HandleJumpCanceled(InputAction.CallbackContext context)
         {
-            jumpReleased = true;
+            if (!IsGameplayInputBlocked) jumpReleased = true;
         }
 
         private void HandleDropPerformed(InputAction.CallbackContext context)
         {
-            dropPressed = true;
+            if (!IsGameplayInputBlocked) dropPressed = true;
         }
 
         private void HandleDashPerformed(InputAction.CallbackContext context)
         {
-            dashPressed = true;
+            if (!IsGameplayInputBlocked) dashPressed = true;
         }
 
         private void HandleWeakKickPerformed(InputAction.CallbackContext context)
         {
-            if (gameplayInputBlocked)
+            if (IsGameplayInputBlocked)
             {
                 return;
             }
@@ -445,7 +454,7 @@ namespace Qusap
 
         private void HandleStrongKickPerformed(InputAction.CallbackContext context)
         {
-            if (gameplayInputBlocked)
+            if (IsGameplayInputBlocked)
             {
                 return;
             }
@@ -456,7 +465,7 @@ namespace Qusap
 
         private void HandleHeadbuttPerformed(InputAction.CallbackContext context)
         {
-            if (gameplayInputBlocked)
+            if (IsGameplayInputBlocked)
             {
                 return;
             }
@@ -472,7 +481,7 @@ namespace Qusap
 
         private void HandleWeaponSwapThrowPerformed(InputAction.CallbackContext context)
         {
-            if (gameplayInputBlocked || weaponSwapThrowInputBuffer == null)
+            if (IsGameplayInputBlocked || weaponSwapThrowInputBuffer == null)
             {
                 return;
             }

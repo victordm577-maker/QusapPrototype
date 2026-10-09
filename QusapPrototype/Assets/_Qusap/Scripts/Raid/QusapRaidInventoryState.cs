@@ -25,6 +25,9 @@ namespace Qusap
         public void BlockOperations() { if (CanOperate) { Status = QusapRaidInventoryStatus.Blocked; OnChanged(); } }
         internal void MarkPending() { Status = QusapRaidInventoryStatus.SettlementPending; }
         internal void MarkSettled() { Status = QusapRaidInventoryStatus.Settled; }
+        internal void MarkExtractionPending() { Status = QusapRaidInventoryStatus.ExtractionPending; }
+        internal void MarkExtracted() { Status = QusapRaidInventoryStatus.Extracted; }
+        internal void RejectExtraction() { if (Status == QusapRaidInventoryStatus.ExtractionPending) Status = QusapRaidInventoryStatus.Active; }
         private void OnChanged() => InventoryChanged?.Invoke();
         public void Dispose() { world.Changed -= OnChanged; InventoryChanged = null; }
         internal int FindEmptyBackpackSlot()

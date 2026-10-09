@@ -72,7 +72,7 @@ namespace Qusap
             out QusapWeaponTransition transition)
         {
             transition = default;
-            if (!EnsureInitialized())
+            if (GetComponent<QusapHitReceiver>()?.IsGameplayRetired == true || !EnsureInitialized())
             {
                 return QusapWeaponOperationResult.InvalidOwner;
             }
@@ -92,7 +92,7 @@ namespace Qusap
         {
             weapon = null;
             transition = default;
-            if (!EnsureInitialized())
+            if (GetComponent<QusapHitReceiver>()?.IsGameplayRetired == true || !EnsureInitialized())
             {
                 return QusapWeaponOperationResult.InvalidOwner;
             }
@@ -113,7 +113,7 @@ namespace Qusap
         {
             weapon = null;
             transition = default;
-            if (!EnsureInitialized())
+            if (GetComponent<QusapHitReceiver>()?.IsGameplayRetired == true || !EnsureInitialized())
             {
                 return QusapWeaponOperationResult.InvalidOwner;
             }
@@ -136,7 +136,7 @@ namespace Qusap
             out QusapWeaponSwapTransition swapTransition)
         {
             swapTransition = default;
-            if (!EnsureInitialized())
+            if (GetComponent<QusapHitReceiver>()?.IsGameplayRetired == true || !EnsureInitialized())
             {
                 return QusapWeaponOperationResult.InvalidOwner;
             }

@@ -15,6 +15,8 @@ namespace Qusap
         public IQusapStashRepository Stash { get; }
         public IReadOnlyList<QusapDeathLootRecord> Containers { get { lock (World.Gate) return containers.Values.ToArray(); } }
         public event Action<QusapDeathLootRecord> DeathSettled;
+        public event Action<QusapRaidInventoryState> ExtractionSettled;
+        public int ExtractionTransfersResolved { get; private set; }
         public QusapRaidInventoryState Register(string participant, string profile, int capacity = 6)
         {
             lock (World.Gate)
@@ -34,7 +36,8 @@ namespace Qusap
                     || registered != state) return QusapLootResult.InvalidSource;
                 string key = World.RaidId + "/death/" + state.ParticipantId;
                 if (containers.ContainsKey(key)) return QusapLootResult.Success;
-                if (state.CanOperate) return QusapLootResult.Blocked;
+                if (state.CanOperate || state.Status == QusapRaidInventoryStatus.Extracted
+                    || state.Status == QusapRaidInventoryStatus.ExtractionPending) return QusapLootResult.Blocked;
                 if (settling.Contains(key)) return QusapLootResult.Reserved;
                 state.MarkPending();
                 var equipped = weaponAdapter?.TrackEquipped();
@@ -70,7 +73,50 @@ namespace Qusap
             World.Notify(); DeathSettled?.Invoke(container);
             return QusapLootResult.Success;
         }
+        // Same ledger, reservation and stash transaction as death; extraction creates no container.
+        public QusapLootResult SettleExtraction(QusapRaidInventoryState state, QusapRaidWeaponAdapter weaponAdapter = null)
+        {
+            lock (World.Gate)
+            {
+                if (state == null || !inventories.TryGetValue(state.ParticipantId, out var registered)
+                    || registered != state || (weaponAdapter != null && !weaponAdapter.BelongsTo(World, state)))
+                    return QusapLootResult.InvalidSource;
+                if (!state.CanOperate) return QusapLootResult.Blocked;
+                var equipped = weaponAdapter?.TrackEquipped();
+                var all = World.Find(QusapLootLocation.Backpack, state.ParticipantId)
+                    .Concat(World.Find(QusapLootLocation.SecurePocket, state.ParticipantId))
+                    .Concat(World.Find(QusapLootLocation.Equipped, state.ParticipantId)).ToArray();
+                if (all.Any(i => i.Location == QusapLootLocation.Equipped && !ReferenceEquals(i, equipped)))
+                    return QusapLootResult.EquipmentRejected;
+                if (!World.Reserve(all)) return QusapLootResult.Reserved;
+                state.MarkExtractionPending();
+                bool released = false, committed = false;
+                try
+                {
+                    if (equipped != null)
+                    {
+                        released = weaponAdapter.TryRelease(equipped.Weapon);
+                        if (!released) return QusapLootResult.EquipmentRejected;
+                    }
+                    bool accepted;
+                    try { accepted = Stash.TryCommitSettlement(World.RaidId + "/extraction/" + state.ParticipantId,
+                        state.ProfileId, Array.AsReadOnly(all)); }
+                    catch { accepted = false; }
+                    if (!accepted)
+                    {
+                        if (released) weaponAdapter.Restore(equipped.Weapon);
+                        return QusapLootResult.StashUnavailable;
+                    }
+                    foreach (var item in all) World.Move(item, QusapLootLocation.Stash, state.ProfileId);
+                    state.MarkExtracted(); ExtractionTransfersResolved++; committed = true;
+                }
+                finally { World.Release(all); if (!committed) state.RejectExtraction(); }
+            }
+            ExtractionSettled?.Invoke(state); // Retire the owner before publishing the changed ledger.
+            World.Notify();
+            return QusapLootResult.Success;
+        }
         public void Dispose()
-        { foreach (var state in inventories.Values) state.Dispose(); DeathSettled = null; }
+        { foreach (var state in inventories.Values) state.Dispose(); DeathSettled = null; ExtractionSettled = null; }
     }
 }

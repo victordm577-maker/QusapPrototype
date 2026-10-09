@@ -48,12 +48,13 @@ namespace Qusap
 
         public void TechnicalRecovery()
         {
-            if (hitReceiver != null && hitReceiver.IsHealthDepleted) return;
+            if (hitReceiver != null && (hitReceiver.IsHealthDepleted || hitReceiver.IsGameplayRetired)) return;
             Recover(QusapRecoveryCause.TechnicalRecovery);
         }
 
         public void ResetForNewSession()
         {
+            if (hitReceiver != null && hitReceiver.IsGameplayRetired) return;
             hitReceiver?.ResetForNewSession();
             Recover(QusapRecoveryCause.NewSession);
         }

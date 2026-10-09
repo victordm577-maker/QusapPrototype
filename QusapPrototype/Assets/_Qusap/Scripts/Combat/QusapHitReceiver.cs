@@ -29,11 +29,13 @@ namespace Qusap
         public float CurrentHealth => Mathf.Clamp(MaxHealth - TotalDamageReceived, 0f, MaxHealth);
         public bool IsHealthDepleted => depletionPending || IsEliminated;
         public bool IsEliminated { get; private set; }
+        public bool IsGameplayRetired { get; private set; }
+        public void RetireFromRaid() { IsGameplayRetired = true; acceptsHits = false; }
 
         public bool AcceptsHits
         {
-            get => acceptsHits && !IsHealthDepleted;
-            set => acceptsHits = value && !IsHealthDepleted;
+            get => acceptsHits && !IsHealthDepleted && !IsGameplayRetired;
+            set => acceptsHits = value && !IsHealthDepleted && !IsGameplayRetired;
         }
 
         private void Awake()
@@ -131,7 +133,7 @@ namespace Qusap
         public void ResetDamage()
         {
             // Legacy live-player test reset. Only an explicit new session can revive.
-            if (IsHealthDepleted) return;
+            if (IsHealthDepleted || IsGameplayRetired) return;
             float previous = TotalDamageReceived;
             TotalDamageReceived = 0f;
             HealthChanged?.Invoke(new QusapHealthChange(this, previous,
@@ -140,6 +142,7 @@ namespace Qusap
 
         public void ResetForNewSession()
         {
+            if (IsGameplayRetired) return; // A retired raid participant must be replaced for a new raid.
             elimination?.RestoreForNewSession();
             IsEliminated = false;
             depletionPending = false;
@@ -152,7 +155,7 @@ namespace Qusap
 
         public float Heal(float amount)
         {
-            if (IsHealthDepleted || !IsFiniteNonNegative(amount) || amount <= 0f
+            if (IsHealthDepleted || IsGameplayRetired || !IsFiniteNonNegative(amount) || amount <= 0f
                 || TotalDamageReceived <= 0f) return 0f;
             float previous = TotalDamageReceived;
             TotalDamageReceived = Mathf.Clamp(previous - amount, 0f, MaxHealth);

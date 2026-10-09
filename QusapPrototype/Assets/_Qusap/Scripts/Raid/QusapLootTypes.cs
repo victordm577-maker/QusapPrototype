@@ -7,7 +7,7 @@ namespace Qusap
     public enum QusapConsumableType { None, Healing }
     public enum QusapLootLocation { World, Backpack, SecurePocket, Equipped, DeathContainer, Stash, Consumed }
     public enum QusapLootResult { Success, Missing, InvalidSource, InvalidDestination, Full, Occupied, Ineligible, Blocked, Reserved, NoEffect, EquipmentRejected, StashUnavailable }
-    public enum QusapRaidInventoryStatus { Active, Blocked, SettlementPending, Settled }
+    public enum QusapRaidInventoryStatus { Active, Blocked, SettlementPending, Settled, ExtractionPending, Extracted }
 
     // Location, holder and slot are changed together exclusively by QusapLootWorld.
     // An Equipped location is a ledger projection, never another equipment slot.

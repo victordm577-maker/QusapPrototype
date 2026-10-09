@@ -22,6 +22,8 @@ namespace Qusap
             TrackEquipped();
         }
         public QusapWeaponInstance CurrentWeapon => equipment.EquippedWeapon;
+        internal bool BelongsTo(QusapLootWorld ledger, QusapRaidInventoryState state)
+            => ReferenceEquals(world, ledger) && ReferenceEquals(inventory, state);
         public QusapLootInstance TrackEquipped()
         {
             lock (world.Gate)

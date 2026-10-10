@@ -226,6 +226,11 @@ namespace Qusap
     {
         private ulong lastIssuedId;
 
+        public ulong NextAvailableId => checked(lastIssuedId + 1);
+
+        public void ReserveThrough(ulong issuedId)
+        { if (issuedId > lastIssuedId) lastIssuedId = issuedId; }
+
         public QusapWeaponIdGenerator(ulong lastIssuedId = 0)
         {
             this.lastIssuedId = lastIssuedId;

@@ -10,9 +10,14 @@ namespace Qusap
         internal readonly object Gate = new();
         private readonly Dictionary<string, QusapLootInstance> items = new(StringComparer.Ordinal);
         private ulong sequence;
-        public QusapLootWorld(string raidId)
-        { RaidId = !string.IsNullOrWhiteSpace(raidId) ? raidId : throw new ArgumentException(nameof(raidId)); }
+        public QusapLootWorld(string raidId, ulong nextItemInstanceId = 1)
+        {
+            RaidId = !string.IsNullOrWhiteSpace(raidId) ? raidId : throw new ArgumentException(nameof(raidId));
+            if (nextItemInstanceId == 0) throw new ArgumentOutOfRangeException(nameof(nextItemInstanceId));
+            sequence = nextItemInstanceId - 1;
+        }
         public string RaidId { get; }
+        public ulong NextItemInstanceId { get { lock (Gate) return checked(sequence + 1); } }
         public event Action Changed;
         public IReadOnlyList<QusapLootInstance> Instances { get { lock (Gate) return items.Values.ToArray(); } }
 

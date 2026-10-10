@@ -20,7 +20,12 @@ namespace Qusap
         public void Configure(QusapRaidInventory[] players, QusapLootDefinition[] loot, QusapDeathLootContainer prefab)
         { participants = players; definitions = loot; deathContainerPrefab = prefab; }
         private void Awake()
-        { Session = new QusapRaidSession(Guid.NewGuid().ToString("N")); Session.DeathSettled += SpawnContainer; }
+        {
+            var profile = GetComponent<QusapLocalProfilePersistence>();
+            profile?.Initialize(this);
+            Session = new QusapRaidSession(Guid.NewGuid().ToString("N"), profile?.Repository);
+            Session.DeathSettled += SpawnContainer;
+        }
         private void Start()
         {
             foreach (var player in participants) player.Initialize(Session, definitions);

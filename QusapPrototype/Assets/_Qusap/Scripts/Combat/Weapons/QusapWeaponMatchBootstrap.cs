@@ -48,6 +48,14 @@ namespace Qusap
         private QusapInputReader playerTwoInput;
 
         public bool IsInitialized => initialized;
+        public ulong NextWeaponInstanceId => idGenerator.NextAvailableId;
+
+        // Reserve future identities before any native weapon is created. Existing IDs never change.
+        public void ReserveWeaponInstanceIdsThrough(ulong issuedId)
+        {
+            if (initialized) throw new System.InvalidOperationException("Reserve weapon IDs before initialization.");
+            idGenerator.ReserveThrough(issuedId);
+        }
         public QusapWeaponVisualCatalog Catalog => catalog;
         public QusapWeaponEquipment PlayerOneEquipment => playerOneEquipment;
         public QusapEquippedWeaponPresenter PlayerOnePresenter => playerOnePresenter;

@@ -10,7 +10,12 @@ namespace Qusap
         private readonly Dictionary<string, QusapDeathLootRecord> containers = new(StringComparer.Ordinal);
         private readonly HashSet<string> settling = new(StringComparer.Ordinal);
         public QusapRaidSession(string raidId, IQusapStashRepository stash = null)
-        { World = new QusapLootWorld(raidId); Stash = stash ?? new QusapMemoryStashRepository(); }
+        {
+            var persistent = stash as QusapPersistentStashRepository;
+            World = new QusapLootWorld(raidId, persistent?.NextItemInstanceId ?? 1);
+            Stash = stash ?? new QusapMemoryStashRepository();
+            persistent?.ObserveAllocator(World);
+        }
         public QusapLootWorld World { get; }
         public IQusapStashRepository Stash { get; }
         public IReadOnlyList<QusapDeathLootRecord> Containers { get { lock (World.Gate) return containers.Values.ToArray(); } }

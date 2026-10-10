@@ -74,7 +74,7 @@ namespace Qusap.Tests
         {
             var catalog = AssetDatabase.FindAssets("t:QusapWeaponVisualCatalog").Select(AssetDatabase.GUIDToAssetPath)
                 .Select(AssetDatabase.LoadAssetAtPath<QusapWeaponVisualCatalog>).First(c => c.Count == 3);
-            var d = Def(QusapLootCategory.Weapon); d.Configure("native", "Sword", QusapLootCategory.Weapon, true, catalog: catalog, weaponId: QusapWeaponVisualCatalog.BlueDefinitionId);
+            var d = Def(QusapLootCategory.Weapon); d.Configure(d.DefinitionId, "Sword", QusapLootCategory.Weapon, true, catalog: catalog, weaponId: QusapWeaponVisualCatalog.BlueDefinitionId);
             var weapon = new QusapWeaponInstance(9001, d.WeaponDefinition);
             var item = raid.World.Create(d, "native", weapon); p1.TryPickup(item.LootInstanceId);
             Assert.That(p1.TryMoveToSecurePocket(item.LootInstanceId), Is.EqualTo(QusapLootResult.Ineligible));

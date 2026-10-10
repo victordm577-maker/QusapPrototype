@@ -20,3 +20,15 @@ MonoBehaviour:
   healAmount: 0
   weaponCatalog: {fileID: 0}
   weaponDefinitionId: 
+  rarity: 0
+  inventoryRulesConfigured: 1
+  maxStack: 10
+  canEnterBackpack: 1
+  canDropOnDeath: 1
+  canPersistInStash: 1
+  consumeOnUse: 1
+  baseValue: 1
+  worldPickupPresentationId: raid_pickup_common
+  tags:
+  - material
+  - raid

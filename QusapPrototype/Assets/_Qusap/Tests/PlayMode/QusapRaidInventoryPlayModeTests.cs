@@ -34,7 +34,8 @@ namespace Qusap.Tests
         { var body = p.GetComponent<Rigidbody>(); body.position = position; if (!body.isKinematic) body.linearVelocity = Vector3.zero; Physics.SyncTransforms(); }
         private QusapLootInstance Bag(int player = 0, QusapLootCategory category = QusapLootCategory.Fragment)
         {
-            var d = raid.Definitions.First(x => x.Category == category); var item = raid.Session.World.Create(d, "PlayMode setup");
+            // These regression fixtures are distinct cargo, not mergeable stacks with identical provenance.
+            var d = raid.Definitions.First(x => x.Category == category); var item = raid.Session.World.Create(d, "PlayMode setup " + raid.Session.World.NextItemInstanceId);
             Assert.That(players[player].State.TryPickup(item.LootInstanceId), Is.EqualTo(QusapLootResult.Success)); return item;
         }
         private void Kill(int p = 0) => Assert.That(players[p].Receiver.TryReceiveEnvironmentDamage(1000, volume), Is.True);

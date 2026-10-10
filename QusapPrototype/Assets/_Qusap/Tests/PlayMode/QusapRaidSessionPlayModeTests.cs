@@ -34,7 +34,7 @@ namespace Qusap.Tests
         private void Place(int player, float x)
         { var body = players[player].GetComponent<Rigidbody>(); body.position = new Vector3(x, 1.01f, 0); if (!body.isKinematic) body.linearVelocity = Vector3.zero; Physics.SyncTransforms(); }
         private QusapLootInstance Bag(int player, QusapLootCategory category = QusapLootCategory.Fragment)
-        { var item = raid.Session.World.Create(raid.Definitions.First(d => d.Category == category), "session test"); Assert.That(players[player].State.TryPickup(item.LootInstanceId), Is.EqualTo(QusapLootResult.Success)); return item; }
+        { var item = raid.Session.World.Create(raid.Definitions.First(d => d.Category == category), "session test " + raid.Session.World.NextItemInstanceId); Assert.That(players[player].State.TryPickup(item.LootInstanceId), Is.EqualTo(QusapLootResult.Success)); return item; }
         [UnitySetUp] public IEnumerator Setup()
         {
             scale = Time.timeScale; step = Time.fixedDeltaTime; devices = new InputTestFixture(); devices.Setup();

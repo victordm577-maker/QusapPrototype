@@ -20,3 +20,15 @@ MonoBehaviour:
   healAmount: 0
   weaponCatalog: {fileID: 0}
   weaponDefinitionId: 
+  rarity: 3
+  inventoryRulesConfigured: 1
+  maxStack: 1
+  canEnterBackpack: 1
+  canDropOnDeath: 1
+  canPersistInStash: 1
+  consumeOnUse: 1
+  baseValue: 20
+  worldPickupPresentationId: raid_pickup_epic
+  tags:
+  - raid
+  - relic

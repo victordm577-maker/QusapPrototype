@@ -17,7 +17,8 @@ namespace Qusap
             IReadOnlyList<QusapLootInstance> items, Func<bool> prepareCompleteTransaction)
         {
             if (string.IsNullOrWhiteSpace(settlementId) || string.IsNullOrWhiteSpace(profileId) || items == null
-                || items.Any(i => i == null) || items.Select(i => i.LootInstanceId).Distinct().Count() != items.Count) return false;
+                || items.Any(i => i == null || !i.Definition.CanPersistInStash || i.Quantity < 1 || i.Quantity > i.Definition.MaxStack)
+                || items.Select(i => i.LootInstanceId).Distinct().Count() != items.Count) return false;
             string fingerprint = profileId + "\n" + string.Join("\n", items.Select(i => i.LootInstanceId).OrderBy(id => id, StringComparer.Ordinal));
             lock (gate)
             {

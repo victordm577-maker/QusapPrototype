@@ -10,25 +10,25 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ca5d90f3b6ceab0a45765e1d4a39e811, type: 3}
-  m_Name: qusap_sword_purple
+  m_Name: raid_resonant_crystal
   m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapLootDefinition
-  definitionId: raid_qusap_sword_purple
-  displayName: Purple Sword
-  category: 3
-  securePocketEligible: 0
+  definitionId: raid_resonant_crystal
+  displayName: Resonant Crystal
+  category: 0
+  securePocketEligible: 1
   consumableType: 0
   healAmount: 0
-  weaponCatalog: {fileID: 11400000, guid: 1c1270a75de81794dad46421412c5439, type: 2}
-  weaponDefinitionId: qusap_sword_purple
+  weaponCatalog: {fileID: 0}
+  weaponDefinitionId: 
   rarity: 2
   inventoryRulesConfigured: 1
-  maxStack: 1
+  maxStack: 3
   canEnterBackpack: 1
   canDropOnDeath: 1
   canPersistInStash: 1
   consumeOnUse: 1
-  baseValue: 12
+  baseValue: 8
   worldPickupPresentationId: raid_pickup_rare
   tags:
+  - material
   - raid
-  - weapon

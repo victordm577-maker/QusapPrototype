@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55731f8ae83306d4a8ca069540a47145, type: 3}
+  m_Name: RaidTestRouteLoot
+  m_EditorClassIdentifier: Qusap.Runtime::Qusap.QusapRaidLootTable
+  lootTableId: raid_test_route_loot
+  entries:
+  - definitionId: raid_shell_fragment
+    weight: 45
+    minimumQuantity: 1
+    maximumQuantity: 3
+    hasMinimumRarity: 0
+    minimumRarity: 0
+  - definitionId: raid_ancient_scale
+    weight: 25
+    minimumQuantity: 1
+    maximumQuantity: 2
+    hasMinimumRarity: 0
+    minimumRarity: 0
+  - definitionId: raid_minor_heal
+    weight: 15
+    minimumQuantity: 1
+    maximumQuantity: 2
+    hasMinimumRarity: 0
+    minimumRarity: 0
+  - definitionId: raid_resonant_crystal
+    weight: 8
+    minimumQuantity: 1
+    maximumQuantity: 2
+    hasMinimumRarity: 0
+    minimumRarity: 0
+  - definitionId: raid_major_heal
+    weight: 4
+    minimumQuantity: 1
+    maximumQuantity: 1
+    hasMinimumRarity: 0
+    minimumRarity: 0
+  - definitionId: raid_basic_sword
+    weight: 2
+    minimumQuantity: 1
+    maximumQuantity: 1
+    hasMinimumRarity: 0
+    minimumRarity: 0
+  - definitionId: raid_rare_relic
+    weight: 1
+    minimumQuantity: 1
+    maximumQuantity: 1
+    hasMinimumRarity: 0
+    minimumRarity: 0

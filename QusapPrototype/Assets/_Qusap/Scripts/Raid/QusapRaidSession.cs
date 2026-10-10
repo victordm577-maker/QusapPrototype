@@ -61,16 +61,19 @@ namespace Qusap
                         if (!released) return QusapLootResult.EquipmentRejected;
                     }
                     bool accepted;
-                    try { accepted = Stash.TryCommitSettlement(key, state.ProfileId, Array.AsReadOnly(pocket)); }
+                    var protectedItems = pocket.Where(i => i.Definition.CanPersistInStash).ToArray();
+                    try { accepted = Stash.TryCommitSettlement(key, state.ProfileId, Array.AsReadOnly(protectedItems)); }
                     catch { accepted = false; }
                     if (!accepted)
                     {
                         if (released) weaponAdapter.Restore(equipped.Weapon);
                         return QusapLootResult.StashUnavailable;
                     }
-                    foreach (var item in cargo) World.Move(item, QusapLootLocation.DeathContainer, key);
-                    foreach (var item in pocket) World.Move(item, QusapLootLocation.Stash, state.ProfileId);
-                    container = new QusapDeathLootRecord(key, state.ParticipantId, cargo.Select(i => new QusapLootSnapshot(i)).ToArray());
+                    foreach (var item in cargo) World.Move(item, item.Definition.CanDropOnDeath ? QusapLootLocation.DeathContainer : QusapLootLocation.Consumed,
+                        item.Definition.CanDropOnDeath ? key : null);
+                    foreach (var item in pocket) World.Move(item, item.Definition.CanPersistInStash ? QusapLootLocation.Stash : QusapLootLocation.Consumed,
+                        item.Definition.CanPersistInStash ? state.ProfileId : null);
+                    container = new QusapDeathLootRecord(key, state.ParticipantId, cargo.Where(i => i.Definition.CanDropOnDeath).Select(i => new QusapLootSnapshot(i)).ToArray());
                     containers.Add(key, container); state.MarkSettled();
                 }
                 finally { World.Release(all); settling.Remove(key); }
@@ -104,15 +107,17 @@ namespace Qusap
                         if (!released) return QusapLootResult.EquipmentRejected;
                     }
                     bool accepted;
+                    var persistent = all.Where(i => i.Definition.CanPersistInStash).ToArray();
                     try { accepted = Stash.TryCommitSettlement(World.RaidId + "/extraction/" + state.ParticipantId,
-                        state.ProfileId, Array.AsReadOnly(all)); }
+                        state.ProfileId, Array.AsReadOnly(persistent)); }
                     catch { accepted = false; }
                     if (!accepted)
                     {
                         if (released) weaponAdapter.Restore(equipped.Weapon);
                         return QusapLootResult.StashUnavailable;
                     }
-                    foreach (var item in all) World.Move(item, QusapLootLocation.Stash, state.ProfileId);
+                    foreach (var item in all) World.Move(item, item.Definition.CanPersistInStash ? QusapLootLocation.Stash : QusapLootLocation.Consumed,
+                        item.Definition.CanPersistInStash ? state.ProfileId : null);
                     state.MarkExtracted(); ExtractionTransfersResolved++; committed = true;
                 }
                 finally { World.Release(all); if (!committed) state.RejectExtraction(); }

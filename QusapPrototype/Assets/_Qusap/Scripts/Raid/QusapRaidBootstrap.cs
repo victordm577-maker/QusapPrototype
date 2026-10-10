@@ -11,16 +11,24 @@ namespace Qusap
     {
         [SerializeField] private QusapRaidInventory[] participants;
         [SerializeField] private QusapLootDefinition[] definitions;
+        [SerializeField] private QusapRaidLootCatalog lootCatalog;
         [SerializeField] private QusapDeathLootContainer deathContainerPrefab;
         private readonly List<QusapDeathLootContainer> views = new();
         public QusapRaidSession Session { get; private set; }
         public IReadOnlyList<QusapRaidInventory> Participants => participants;
         public IReadOnlyList<QusapDeathLootContainer> ContainerViews => views;
         public IReadOnlyList<QusapLootDefinition> Definitions => definitions;
-        public void Configure(QusapRaidInventory[] players, QusapLootDefinition[] loot, QusapDeathLootContainer prefab)
-        { participants = players; definitions = loot; deathContainerPrefab = prefab; }
+        public QusapRaidLootCatalog LootCatalog => lootCatalog;
+        public void Configure(QusapRaidInventory[] players, QusapLootDefinition[] loot, QusapDeathLootContainer prefab, QusapRaidLootCatalog catalog = null)
+        { participants = players; definitions = loot; deathContainerPrefab = prefab; lootCatalog = catalog; }
         private void Awake()
         {
+            if (lootCatalog != null)
+            {
+                var errors = lootCatalog.Validate();
+                if (errors.Count != 0) throw new InvalidOperationException("Invalid authoritative raid catalog: " + string.Join("; ", errors));
+                definitions = lootCatalog.Definitions.ToArray();
+            }
             var profile = GetComponent<QusapLocalProfilePersistence>();
             profile?.Initialize(this);
             Session = new QusapRaidSession(Guid.NewGuid().ToString("N"), profile?.Repository);

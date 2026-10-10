@@ -57,6 +57,13 @@ namespace Qusap
             idGenerator.ReserveThrough(issuedId);
         }
         public QusapWeaponVisualCatalog Catalog => catalog;
+        // Raid loot uses the existing native registry and allocator, never a parallel weapon catalog.
+        public QusapWeaponInstance CreateRaidLootWeapon(string definitionId)
+        {
+            if (!TryInitialize() || !catalog.TryGetDefinition(definitionId, out var definition))
+                throw new System.InvalidOperationException("Unknown native weapon for raid loot.");
+            return new QusapWeaponInstance(idGenerator.Next(), definition);
+        }
         public QusapWeaponEquipment PlayerOneEquipment => playerOneEquipment;
         public QusapEquippedWeaponPresenter PlayerOnePresenter => playerOnePresenter;
         public QusapWeaponEquipment PlayerTwoEquipment => playerTwoEquipment;

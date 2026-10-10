@@ -20,3 +20,15 @@ MonoBehaviour:
   healAmount: 0
   weaponCatalog: {fileID: 11400000, guid: 1c1270a75de81794dad46421412c5439, type: 2}
   weaponDefinitionId: qusap_sword_white
+  rarity: 0
+  inventoryRulesConfigured: 1
+  maxStack: 1
+  canEnterBackpack: 1
+  canDropOnDeath: 1
+  canPersistInStash: 1
+  consumeOnUse: 1
+  baseValue: 5
+  worldPickupPresentationId: raid_pickup_common
+  tags:
+  - raid
+  - weapon

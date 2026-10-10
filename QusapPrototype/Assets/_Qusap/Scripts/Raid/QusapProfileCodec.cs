@@ -16,13 +16,14 @@ namespace Qusap
         public string Provenance;
         public ulong NativeWeaponInstanceId;
         public string NativeWeaponDefinitionId;
+        public int Quantity = 1;
 
         public static QusapProfileItem From(QusapLootSnapshot item) => new()
         {
             InstanceId = item.LootInstanceId, DefinitionId = item.DefinitionId,
             RaidId = item.RaidId, Provenance = item.Provenance,
             NativeWeaponInstanceId = item.Weapon?.InstanceId ?? 0,
-            NativeWeaponDefinitionId = item.Weapon?.Definition.Id ?? string.Empty
+            NativeWeaponDefinitionId = item.Weapon?.Definition.Id ?? string.Empty, Quantity = item.Quantity
         };
     }
 
@@ -42,7 +43,10 @@ namespace Qusap
     }
 
     [Serializable] public sealed class QusapProfileDocument
-    { public QusapProfileContent Content; public string Checksum; }
+    {
+        public QusapProfileContent Content; public string Checksum;
+        [NonSerialized] internal bool LegacyWithoutQuantity;
+    }
 
     // Only primitive DTOs cross the disk boundary. Unity objects are resolved by exact definition ID.
     public sealed class QusapProfileCodec
@@ -68,7 +72,8 @@ namespace Qusap
             content.Settlements = content.Settlements.OrderBy(r => r.SettlementId, StringComparer.Ordinal).ToArray();
             return new QusapProfileDocument { Content = content, Checksum = Sha256(JsonUtility.ToJson(content)) };
         }
-        public static string Encode(QusapProfileDocument document) => JsonUtility.ToJson(document);
+        public static string Encode(QusapProfileDocument document) => document.LegacyWithoutQuantity
+            ? JsonUtility.ToJson(QusapLegacyProfileDocument.From(document)) : JsonUtility.ToJson(document);
 
         public bool TryDecode(string json, out QusapProfileDocument document, out string error, out bool future)
         {
@@ -80,7 +85,14 @@ namespace Qusap
                 future = document.Content.SchemaVersion > 1;
                 if (document.Content.SchemaVersion != 1) { error = "Incompatible SchemaVersion: " + document.Content.SchemaVersion; return false; }
                 // Reject omitted/unknown/duplicate fields and noncanonical payloads rather than hashing only a subset.
-                if (!string.Equals(json, Encode(document), StringComparison.Ordinal)) { error = "Noncanonical or incomplete JSON"; return false; }
+                if (!string.Equals(json, Encode(document), StringComparison.Ordinal))
+                {
+                    // Exact approved v1 wire format: its original Content bytes remain checksum-authoritative.
+                    var legacy = JsonUtility.FromJson<QusapLegacyProfileDocument>(json);
+                    if (legacy?.Content == null || !string.Equals(json, JsonUtility.ToJson(legacy), StringComparison.Ordinal))
+                    { error = "Noncanonical or incomplete JSON"; return false; }
+                    document = legacy.RestoreQuantityOne();
+                }
                 return Validate(document, out error);
             }
             catch (Exception exception) { document = null; error = "Invalid JSON: " + exception.Message; return false; }
@@ -95,7 +107,9 @@ namespace Qusap
                 || !DateTime.TryParseExact(c.SavedAtUtc, "O", CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out var date) || date.Kind != DateTimeKind.Utc
                 || c.NextItemInstanceId == 0 || c.NextNativeWeaponInstanceId == 0) return false;
-            if (!string.Equals(document.Checksum, Sha256(JsonUtility.ToJson(c)), StringComparison.Ordinal))
+            string checksumContent = document.LegacyWithoutQuantity
+                ? JsonUtility.ToJson(QusapLegacyProfileContent.From(c)) : JsonUtility.ToJson(c);
+            if (!string.Equals(document.Checksum, Sha256(checksumContent), StringComparison.Ordinal))
             { error = "Checksum mismatch"; return false; }
             var ids = new HashSet<string>(StringComparer.Ordinal);
             var nativeIds = new HashSet<ulong>();
@@ -112,6 +126,9 @@ namespace Qusap
                 previous = item.InstanceId;
                 error = "Unknown DefinitionId: " + item.DefinitionId;
                 if (item.DefinitionId == null || !definitions.TryGetValue(item.DefinitionId, out var definition)) return false;
+                error = "Invalid Quantity or stash rule";
+                if (!definition.CanPersistInStash || item.Quantity < 1 || item.Quantity > definition.MaxStack
+                    || (!definition.IsStackable && item.Quantity != 1) || (document.LegacyWithoutQuantity && item.Quantity != 1)) return false;
                 error = "Invalid native weapon identity";
                 if (definition.Category == QusapLootCategory.Weapon)
                 {
@@ -148,9 +165,41 @@ namespace Qusap
                 var definition = definitions[item.DefinitionId];
                 var weapon = item.NativeWeaponInstanceId == 0 ? null
                     : new QusapWeaponInstance(item.NativeWeaponInstanceId, definition.WeaponDefinition);
-                return new QusapLootInstance(item.InstanceId, item.RaidId, definition, item.Provenance, weapon)
+                return new QusapLootInstance(item.InstanceId, item.RaidId, definition, item.Provenance, weapon, item.Quantity)
                 { Location = QusapLootLocation.Stash, HolderId = content.ProfileId, SlotIndex = -1 };
             }).ToArray();
         }
+    }
+
+    // Compatibility DTOs describe the already approved v1 shape, not a second stash or profile authority.
+    [Serializable] internal sealed class QusapLegacyProfileItem
+    {
+        public string InstanceId; public string DefinitionId; public string RaidId; public string Provenance;
+        public ulong NativeWeaponInstanceId; public string NativeWeaponDefinitionId;
+        public static QusapLegacyProfileItem From(QusapProfileItem item) => new() {
+            InstanceId = item.InstanceId, DefinitionId = item.DefinitionId, RaidId = item.RaidId, Provenance = item.Provenance,
+            NativeWeaponInstanceId = item.NativeWeaponInstanceId, NativeWeaponDefinitionId = item.NativeWeaponDefinitionId };
+        public QusapProfileItem Restore() => new() { InstanceId = InstanceId, DefinitionId = DefinitionId, RaidId = RaidId,
+            Provenance = Provenance, NativeWeaponInstanceId = NativeWeaponInstanceId, NativeWeaponDefinitionId = NativeWeaponDefinitionId, Quantity = 1 };
+    }
+    [Serializable] internal sealed class QusapLegacyProfileContent
+    {
+        public int SchemaVersion = 1; public string ProfileId; public long Revision; public string SavedAtUtc;
+        public ulong NextItemInstanceId = 1; public ulong NextNativeWeaponInstanceId = 1;
+        public QusapLegacyProfileItem[] Stash = Array.Empty<QusapLegacyProfileItem>();
+        public QusapProfileReceipt[] Settlements = Array.Empty<QusapProfileReceipt>();
+        public static QusapLegacyProfileContent From(QusapProfileContent c) => new() {
+            SchemaVersion = c.SchemaVersion, ProfileId = c.ProfileId, Revision = c.Revision, SavedAtUtc = c.SavedAtUtc,
+            NextItemInstanceId = c.NextItemInstanceId, NextNativeWeaponInstanceId = c.NextNativeWeaponInstanceId,
+            Stash = c.Stash.Select(QusapLegacyProfileItem.From).ToArray(), Settlements = c.Settlements };
+        public QusapProfileContent Restore() => new() { SchemaVersion = SchemaVersion, ProfileId = ProfileId,
+            Revision = Revision, SavedAtUtc = SavedAtUtc, NextItemInstanceId = NextItemInstanceId,
+            NextNativeWeaponInstanceId = NextNativeWeaponInstanceId, Stash = Stash?.Select(i => i?.Restore()).ToArray(), Settlements = Settlements };
+    }
+    [Serializable] internal sealed class QusapLegacyProfileDocument
+    {
+        public QusapLegacyProfileContent Content; public string Checksum;
+        public static QusapLegacyProfileDocument From(QusapProfileDocument d) => new() { Content = QusapLegacyProfileContent.From(d.Content), Checksum = d.Checksum };
+        public QusapProfileDocument RestoreQuantityOne() => new() { Content = Content.Restore(), Checksum = Checksum, LegacyWithoutQuantity = true };
     }
 }

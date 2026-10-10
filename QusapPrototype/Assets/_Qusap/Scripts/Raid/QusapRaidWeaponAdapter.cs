@@ -81,6 +81,7 @@ namespace Qusap
                 if (slot < 0) return QusapLootResult.Full;
                 var item = TrackEquipped();
                 if (item == null) return QusapLootResult.Missing;
+                if (!item.Definition.CanEnterBackpack) return QusapLootResult.Ineligible;
                 if (!world.Reserve(new[] { item })) return QusapLootResult.Reserved;
                 try
                 {
@@ -92,6 +93,10 @@ namespace Qusap
             world.Notify(); return QusapLootResult.Success;
         }
         public QusapLootResult TryEquipWeaponFromContainer(string containerId, string id)
+            => TryEquipExisting(QusapLootLocation.DeathContainer, containerId, id);
+        public QusapLootResult TryEquipWeaponFromBackpack(string id)
+            => TryEquipExisting(QusapLootLocation.Backpack, inventory.ParticipantId, id);
+        private QusapLootResult TryEquipExisting(QusapLootLocation source, string holder, string id)
         {
             lock (world.Gate)
             {
@@ -99,7 +104,7 @@ namespace Qusap
                 if (equipment.HasWeapon) return QusapLootResult.Occupied;
                 var item = world.Get(id);
                 if (item == null) return QusapLootResult.Missing;
-                if (item.Location != QusapLootLocation.DeathContainer || item.HolderId != containerId) return QusapLootResult.InvalidSource;
+                if (item.Location != source || item.HolderId != holder) return QusapLootResult.InvalidSource;
                 if (item.Weapon == null || !item.Weapon.IsFree) return QusapLootResult.Ineligible;
                 if (!world.Reserve(new[] { item })) return QusapLootResult.Reserved;
                 controlled = true;

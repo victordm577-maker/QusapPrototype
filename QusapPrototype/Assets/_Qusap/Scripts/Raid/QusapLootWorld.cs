@@ -22,12 +22,14 @@ namespace Qusap
         public IReadOnlyList<QusapLootInstance> Instances { get { lock (Gate) return items.Values.ToArray(); } }
 
         public QusapLootInstance Create(QusapLootDefinition definition, string provenance,
-            QusapWeaponInstance weapon = null)
+            QusapWeaponInstance weapon = null, int quantity = 1)
         {
             lock (Gate)
             {
                 if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionId))
                     throw new ArgumentException("Missing definition.");
+                if (quantity < 1 || quantity > definition.MaxStack || (!definition.IsStackable && quantity != 1))
+                    throw new ArgumentOutOfRangeException(nameof(quantity));
                 if ((definition.Category == QusapLootCategory.Weapon) != (weapon != null)
                     || (weapon != null && (definition.WeaponDefinition == null
                         || definition.WeaponDefinition.Id != weapon.Definition.Id)))
@@ -36,7 +38,7 @@ namespace Qusap
                     && (ReferenceEquals(i.Weapon, weapon) || i.Weapon.InstanceId == weapon.InstanceId)))
                     throw new InvalidOperationException("Duplicate native weapon identity.");
                 var item = new QusapLootInstance(RaidId + "/loot/" + checked(++sequence), RaidId,
-                    definition, provenance ?? string.Empty, weapon);
+                    definition, provenance ?? string.Empty, weapon, quantity);
                 item.Location = QusapLootLocation.World; item.SlotIndex = -1;
                 items.Add(item.LootInstanceId, item);
                 return item;
@@ -84,6 +86,27 @@ namespace Qusap
                 }
                 else if (target == QusapLootLocation.Backpack)
                 {
+                    if (!item.Definition.CanEnterBackpack) return QusapLootResult.Ineligible;
+                    // Acquisition may merge; explicit pocket transfers always preserve the complete instance.
+                    if (item.Definition.IsStackable && (source == QusapLootLocation.World || source == QusapLootLocation.DeathContainer))
+                    {
+                        var partials = Find(target, destination.ParticipantId).Where(i => i.DefinitionId == item.DefinitionId
+                            && i.RaidId == item.RaidId && i.Provenance == item.Provenance && i.Weapon == null
+                            && i.Quantity < i.Definition.MaxStack).ToArray();
+                        if (partials.Any(i => i.Reserved)) return QusapLootResult.Reserved;
+                        int remaining = item.Quantity;
+                        var additions = partials.Select(i => { int add = Math.Min(remaining, i.Definition.MaxStack - i.Quantity); remaining -= add; return add; }).ToArray();
+                        slot = remaining == 0 ? -1 : destination.FindEmptyBackpackSlot();
+                        if (remaining > 0 && slot < 0) return QusapLootResult.Full;
+                        var transaction = partials.Concat(new[] { item }).ToArray();
+                        if (!Reserve(transaction)) return QusapLootResult.Reserved;
+                        for (int i = 0; i < partials.Length; i++) partials[i].Quantity += additions[i];
+                        item.Quantity = remaining;
+                        Move(item, remaining == 0 ? QusapLootLocation.Merged : target,
+                            remaining == 0 ? null : destination.ParticipantId, slot);
+                        Release(transaction);
+                        goto Completed;
+                    }
                     slot = destination.FindEmptyBackpackSlot();
                     if (slot < 0) return QusapLootResult.Full;
                 }
@@ -91,6 +114,7 @@ namespace Qusap
                 if (!Reserve(new[] { item })) return QusapLootResult.Reserved;
                 Move(item, target, destination.ParticipantId, slot);
                 Release(new[] { item });
+            Completed:;
             }
             Notify();
             return QusapLootResult.Success;

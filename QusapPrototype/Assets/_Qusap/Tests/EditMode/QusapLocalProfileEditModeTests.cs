@@ -251,8 +251,9 @@ namespace Qusap.Tests
         [Test] public void SavedDtoExcludesTransientRaidAndUnityState()
         {
             SaveFirst(); string json = File.ReadAllText(Main);
-            foreach (string field in new[] { "GameObject", "MonoBehaviour", "ScriptableObject", "OwnerEntityId", "CurrentHealth", "Velocity", "Animator", "Hitstun", "Position", "Extracted", "Eliminated", "SlotIndex", "HolderId", "Quantity" })
+            foreach (string field in new[] { "GameObject", "MonoBehaviour", "ScriptableObject", "OwnerEntityId", "CurrentHealth", "Velocity", "Animator", "Hitstun", "Position", "Extracted", "Eliminated", "SlotIndex", "HolderId", "Rarity", "MaxStack", "BaseValue", "HealAmount", "Tags" })
                 Assert.That(json, Does.Not.Contain(field));
+            Assert.That(json, Does.Contain("\"Quantity\":1")); // Quantity is now persistent primitive data, not runtime state.
         }
     }
 }

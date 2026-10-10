@@ -61,7 +61,11 @@ namespace Qusap
             lock (world.Gate)
             {
                 if (!float.IsFinite(applied) || applied <= 0f) { world.Release(new[] { item }); return QusapLootResult.NoEffect; }
-                world.Move(item, QusapLootLocation.Consumed);
+                if (item.Definition.ConsumeOnUse)
+                {
+                    item.Quantity--;
+                    if (item.Quantity == 0) world.Move(item, QusapLootLocation.Consumed);
+                }
                 world.Release(new[] { item });
             }
             world.Notify();

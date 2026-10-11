@@ -23,6 +23,7 @@ namespace Qusap
         [SerializeField] private float previousOwnerPickupLockout =
             (float)QusapWeaponPickupResolver.DefaultPreviousOwnerLockout;
         [SerializeField] private bool spawnInitialWhiteWeapon;
+        [SerializeField] private bool spawnDefaultWeapons = true;
         [SerializeField] private Vector3 initialWhiteWeaponPosition =
             new(0f, 0.35f, 0f);
         [SerializeField] private float forwardThrowDistance = 4.5f;
@@ -85,6 +86,12 @@ namespace Qusap
 
         private void Update()
         {
+            for (int i = droppedWeapons.Count - 1; i >= 0; i--)
+            {
+                var view = droppedWeapons[i];
+                if (view == null || !view.Weapon.IsRetired) continue;
+                representedDroppedIds.Remove(view.Weapon.InstanceId); droppedWeapons.RemoveAt(i); Destroy(view.gameObject);
+            }
             if (initialized && Time.timeScale > 0f)
             {
                 ProcessSwapInput(playerOneEquipment, playerOneInput);
@@ -243,6 +250,12 @@ namespace Qusap
             }
 
             Subscribe();
+            if (!spawnDefaultWeapons)
+            {
+                playerOneInput = playerOneEquipment.GetComponent<QusapInputReader>();
+                playerTwoInput = playerTwoEquipment.GetComponent<QusapInputReader>();
+                initialized = true; return true;
+            }
             QusapWeaponInstance playerOneWeapon = new(idGenerator.Next(), blueDefinition);
             QusapWeaponInstance playerTwoWeapon = new(idGenerator.Next(), purpleDefinition);
             QusapWeaponOperationResult playerOneResult = playerOneEquipment.TryEquip(

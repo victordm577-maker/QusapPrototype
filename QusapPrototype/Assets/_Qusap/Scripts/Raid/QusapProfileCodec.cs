@@ -18,7 +18,8 @@ namespace Qusap
         public string NativeWeaponDefinitionId;
         public int Quantity = 1;
 
-        public static QusapProfileItem From(QusapLootSnapshot item) => new()
+        public static QusapProfileItem From(QusapLootSnapshot item) => item.RaidLoaner
+            ? throw new InvalidOperationException("RaidLoaner cannot cross the persistence boundary.") : new()
         {
             InstanceId = item.LootInstanceId, DefinitionId = item.DefinitionId,
             RaidId = item.RaidId, Provenance = item.Provenance,
@@ -32,7 +33,7 @@ namespace Qusap
 
     [Serializable] public sealed class QusapProfileContent
     {
-        public int SchemaVersion = 1;
+        public int SchemaVersion = 2;
         public string ProfileId;
         public long Revision;
         public string SavedAtUtc;
@@ -40,6 +41,8 @@ namespace Qusap
         public ulong NextNativeWeaponInstanceId = 1;
         public QusapProfileItem[] Stash = Array.Empty<QusapProfileItem>();
         public QusapProfileReceipt[] Settlements = Array.Empty<QusapProfileReceipt>();
+        public QusapActiveDeploymentManifest ActiveDeploymentManifest;
+        public string RecoveryReason = string.Empty;
     }
 
     [Serializable] public sealed class QusapProfileDocument
@@ -70,10 +73,18 @@ namespace Qusap
         {
             content.Stash = content.Stash.OrderBy(i => i.InstanceId, StringComparer.Ordinal).ToArray();
             content.Settlements = content.Settlements.OrderBy(r => r.SettlementId, StringComparer.Ordinal).ToArray();
-            return new QusapProfileDocument { Content = content, Checksum = Sha256(JsonUtility.ToJson(content)) };
+            if (content.ActiveDeploymentManifest != null) content.ActiveDeploymentManifest.Items = content.ActiveDeploymentManifest.Items.OrderBy(i => i.InstanceId, StringComparer.Ordinal).ToArray();
+            return new QusapProfileDocument { Content = content, Checksum = Sha256(WireContent(content)) };
         }
+        private static string WireContent(QusapProfileContent c) => c.SchemaVersion == 1
+            ? JsonUtility.ToJson(QusapV1ProfileContent.From(c)) : NullableManifest(JsonUtility.ToJson(c), c);
+        // Unity serializes a null inline class as an empty object. Preserve an actual nullable journal on disk.
+        private static string NullableManifest(string json, QusapProfileContent c) => c.ActiveDeploymentManifest != null ? json
+            : json.Replace("\"ActiveDeploymentManifest\":" + JsonUtility.ToJson(new QusapActiveDeploymentManifest()), "\"ActiveDeploymentManifest\":null");
         public static string Encode(QusapProfileDocument document) => document.LegacyWithoutQuantity
-            ? JsonUtility.ToJson(QusapLegacyProfileDocument.From(document)) : JsonUtility.ToJson(document);
+            ? JsonUtility.ToJson(QusapLegacyProfileDocument.From(document)) : document.Content.SchemaVersion == 1
+            ? JsonUtility.ToJson(new QusapV1ProfileDocument { Content = QusapV1ProfileContent.From(document.Content), Checksum = document.Checksum })
+            : NullableManifest(JsonUtility.ToJson(document), document.Content);
 
         public bool TryDecode(string json, out QusapProfileDocument document, out string error, out bool future)
         {
@@ -82,12 +93,14 @@ namespace Qusap
             {
                 document = JsonUtility.FromJson<QusapProfileDocument>(json);
                 if (document?.Content == null) return false;
-                future = document.Content.SchemaVersion > 1;
-                if (document.Content.SchemaVersion != 1) { error = "Incompatible SchemaVersion: " + document.Content.SchemaVersion; return false; }
+                if (document.Content.SchemaVersion == 1 || json.Contains("\"ActiveDeploymentManifest\":null")) document.Content.ActiveDeploymentManifest = null;
+                future = document.Content.SchemaVersion > 2;
+                if (document.Content.SchemaVersion != 1 && document.Content.SchemaVersion != 2) { error = "Incompatible SchemaVersion: " + document.Content.SchemaVersion; return false; }
                 // Reject omitted/unknown/duplicate fields and noncanonical payloads rather than hashing only a subset.
                 if (!string.Equals(json, Encode(document), StringComparison.Ordinal))
                 {
                     // Exact approved v1 wire format: its original Content bytes remain checksum-authoritative.
+                    if (document.Content.SchemaVersion != 1) { error = "Noncanonical or incomplete JSON"; return false; }
                     var legacy = JsonUtility.FromJson<QusapLegacyProfileDocument>(json);
                     if (legacy?.Content == null || !string.Equals(json, JsonUtility.ToJson(legacy), StringComparison.Ordinal))
                     { error = "Noncanonical or incomplete JSON"; return false; }
@@ -102,19 +115,27 @@ namespace Qusap
         {
             error = "Invalid profile metadata";
             var c = document?.Content;
-            if (c == null || c.SchemaVersion != 1 || string.IsNullOrWhiteSpace(c.ProfileId)
+            if (c == null || (c.SchemaVersion != 1 && c.SchemaVersion != 2) || string.IsNullOrWhiteSpace(c.ProfileId)
                 || c.ProfileId.Contains('\n') || c.Revision < 1 || c.Stash == null || c.Settlements == null
                 || !DateTime.TryParseExact(c.SavedAtUtc, "O", CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out var date) || date.Kind != DateTimeKind.Utc
                 || c.NextItemInstanceId == 0 || c.NextNativeWeaponInstanceId == 0) return false;
             string checksumContent = document.LegacyWithoutQuantity
-                ? JsonUtility.ToJson(QusapLegacyProfileContent.From(c)) : JsonUtility.ToJson(c);
+                ? JsonUtility.ToJson(QusapLegacyProfileContent.From(c)) : WireContent(c);
             if (!string.Equals(document.Checksum, Sha256(checksumContent), StringComparison.Ordinal))
             { error = "Checksum mismatch"; return false; }
             var ids = new HashSet<string>(StringComparer.Ordinal);
+            var stashIds = new HashSet<string>(c.Stash.Select(i => i?.InstanceId), StringComparer.Ordinal);
+            var manifest = c.ActiveDeploymentManifest;
+            if (c.SchemaVersion == 1 && manifest != null) { error = "Manifest requires schema 2"; return false; }
+            if (manifest != null && !manifest.ValidMetadata()) { error = "Invalid deployment manifest"; return false; }
+            foreach (var list in new[] { c.Stash, manifest?.Items ?? Array.Empty<QusapProfileItem>() })
+                if (!list.Select(i => i?.InstanceId).SequenceEqual(list.Select(i => i?.InstanceId).OrderBy(id => id, StringComparer.Ordinal)))
+                { error = "Noncanonical item order"; return false; }
+            var owned = c.Stash.Concat(manifest?.Items ?? Array.Empty<QusapProfileItem>()).OrderBy(i => i?.InstanceId, StringComparer.Ordinal);
             var nativeIds = new HashSet<ulong>();
             string previous = null;
-            foreach (var item in c.Stash)
+            foreach (var item in owned)
             {
                 error = "Invalid or duplicate InstanceId";
                 if (item == null || string.IsNullOrWhiteSpace(item.InstanceId) || item.InstanceId.Contains('\n')
@@ -127,7 +148,7 @@ namespace Qusap
                 error = "Unknown DefinitionId: " + item.DefinitionId;
                 if (item.DefinitionId == null || !definitions.TryGetValue(item.DefinitionId, out var definition)) return false;
                 error = "Invalid Quantity or stash rule";
-                if (!definition.CanPersistInStash || item.Quantity < 1 || item.Quantity > definition.MaxStack
+                if (item.Provenance == "RaidLoaner" || !definition.CanPersistInStash || item.Quantity < 1 || item.Quantity > definition.MaxStack
                     || (!definition.IsStackable && item.Quantity != 1) || (document.LegacyWithoutQuantity && item.Quantity != 1)) return false;
                 error = "Invalid native weapon identity";
                 if (definition.Category == QusapLootCategory.Weapon)
@@ -137,6 +158,8 @@ namespace Qusap
                         || definition.WeaponDefinition.Id != item.NativeWeaponDefinitionId) return false;
                 }
                 else if (item.NativeWeaponInstanceId != 0 || item.NativeWeaponDefinitionId != string.Empty) return false;
+                if (manifest != null && manifest.Items.Contains(item) && definition.Category != QusapLootCategory.Weapon
+                    && definition.Category != QusapLootCategory.Consumable) { error = "Invalid manifest category"; return false; }
             }
             var receiptIds = new HashSet<string>(StringComparer.Ordinal);
             var receiptedItems = new HashSet<string>(StringComparer.Ordinal);
@@ -152,21 +175,23 @@ namespace Qusap
                 if (parts.Length < 2 || parts[0] != c.ProfileId) return false;
                 var receiptItems = parts.Skip(1).ToArray();
                 if (!receiptItems.SequenceEqual(receiptItems.OrderBy(id => id, StringComparer.Ordinal))) return false;
-                foreach (string id in receiptItems) if (!ids.Contains(id) || !receiptedItems.Add(id)) return false;
+                foreach (string id in receiptItems) if (!stashIds.Contains(id) || !receiptedItems.Add(id)) return false;
             }
-            if (!ids.SetEquals(receiptedItems)) { error = "Unreceipted stash objects"; return false; }
+            if (!stashIds.SetEquals(receiptedItems)) { error = "Unreceipted stash objects"; return false; }
             error = "Valid"; return true;
         }
 
         public QusapLootInstance[] Restore(QusapProfileContent content)
+            => RestoreItems(content.Stash, content.ProfileId);
+        internal QusapLootInstance[] RestoreItems(QusapProfileItem[] items, string profileId)
         {
-            return content.Stash.Select(item =>
+            return items.Select(item =>
             {
                 var definition = definitions[item.DefinitionId];
                 var weapon = item.NativeWeaponInstanceId == 0 ? null
                     : new QusapWeaponInstance(item.NativeWeaponInstanceId, definition.WeaponDefinition);
                 return new QusapLootInstance(item.InstanceId, item.RaidId, definition, item.Provenance, weapon, item.Quantity)
-                { Location = QusapLootLocation.Stash, HolderId = content.ProfileId, SlotIndex = -1 };
+                { Location = QusapLootLocation.Stash, HolderId = profileId, SlotIndex = -1 };
             }).ToArray();
         }
     }

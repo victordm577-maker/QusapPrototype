@@ -19,7 +19,8 @@ namespace Qusap
         public string ProfileId { get; }
         public int Capacity { get; }
         public QusapRaidInventoryStatus Status { get; private set; }
-        public bool CanOperate => Status == QusapRaidInventoryStatus.Active;
+        internal bool DeploymentLocked { get; set; }
+        public bool CanOperate => Status == QusapRaidInventoryStatus.Active && !DeploymentLocked;
         public event Action InventoryChanged;
         internal void BindEquipment(Func<QusapWeaponInstance> read) => readEquipped = read;
         public void BlockOperations() { if (CanOperate) { Status = QusapRaidInventoryStatus.Blocked; OnChanged(); } }

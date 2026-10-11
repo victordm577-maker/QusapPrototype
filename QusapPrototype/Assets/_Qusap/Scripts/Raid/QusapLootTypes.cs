@@ -24,6 +24,8 @@ namespace Qusap
         public string DefinitionId => Definition.DefinitionId;
         public string Provenance { get; }
         public QusapWeaponInstance Weapon { get; }
+        public bool RaidLoaner { get; internal set; }
+        public bool CanPersist => !RaidLoaner && Definition.CanPersistInStash;
         public int Quantity { get; internal set; }
         public QusapLootLocation Location { get; internal set; }
         public string HolderId { get; internal set; }
@@ -39,6 +41,7 @@ namespace Qusap
             RaidId = item.RaidId; Provenance = item.Provenance; DisplayName = item.Definition.DisplayName;
             Location = item.Location; HolderId = item.HolderId; SlotIndex = item.SlotIndex;
             Category = item.Definition.Category; Weapon = item.Weapon; Quantity = item.Quantity; Rarity = item.Definition.Rarity;
+            RaidLoaner = item.RaidLoaner;
         }
         public string LootInstanceId { get; }
         public string DefinitionId { get; }
@@ -52,6 +55,7 @@ namespace Qusap
         public QusapWeaponInstance Weapon { get; }
         public int Quantity { get; }
         public QusapLootRarity Rarity { get; }
+        public bool RaidLoaner { get; }
     }
 
     public sealed class QusapRaidInventorySnapshot

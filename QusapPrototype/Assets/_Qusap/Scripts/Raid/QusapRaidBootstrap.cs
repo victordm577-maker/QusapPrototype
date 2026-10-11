@@ -13,6 +13,7 @@ namespace Qusap
         [SerializeField] private QusapLootDefinition[] definitions;
         [SerializeField] private QusapRaidLootCatalog lootCatalog;
         [SerializeField] private QusapDeathLootContainer deathContainerPrefab;
+        [SerializeField] private bool deferForDeployment;
         private readonly List<QusapDeathLootContainer> views = new();
         public QusapRaidSession Session { get; private set; }
         public IReadOnlyList<QusapRaidInventory> Participants => participants;
@@ -31,13 +32,26 @@ namespace Qusap
             }
             var profile = GetComponent<QusapLocalProfilePersistence>();
             profile?.Initialize(this);
+            if (deferForDeployment) return;
             Session = new QusapRaidSession(Guid.NewGuid().ToString("N"), profile?.Repository);
             Session.DeathSettled += SpawnContainer;
         }
         private void Start()
         {
+            if (Session == null) return;
             foreach (var player in participants) player.Initialize(Session, definitions);
             Session.World.Notify();
+        }
+        public void BeginDeploymentSession(QusapRaidDeploymentAuthority deployment)
+        {
+            if (!deferForDeployment || Session != null || deployment.Status != QusapDeploymentStatus.Prepared)
+                throw new InvalidOperationException("Expected the first committed deployment");
+            Session = deployment.Session; Session.DeathSettled += SpawnContainer;
+            var local = participants.Single(p => p.ParticipantId == deployment.Inventory.ParticipantId);
+            local.BindDeployment(Session, deployment.Inventory, deployment.WeaponAdapter);
+            foreach (var player in participants) if (player != local) player.Initialize(Session, definitions);
+            foreach (var player in participants) player.GetComponent<QusapRaidExtraction>()?.BindSession();
+            GetComponent<QusapRaidSessionObserver>()?.InitializeSession();
         }
         private void SpawnContainer(QusapDeathLootRecord record)
         {

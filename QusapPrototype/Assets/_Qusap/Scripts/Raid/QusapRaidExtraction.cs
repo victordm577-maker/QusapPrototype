@@ -18,7 +18,8 @@ namespace Qusap
         public string LastRejection { get; private set; } = "None";
         private void Awake()
         { inventory = GetComponent<QusapRaidInventory>(); recovery = GetComponent<QusapRespawnController>(); }
-        private void Start() { session = inventory.Session; session.ExtractionSettled += Settled; }
+        private void Start() { if (inventory.Session != null) BindSession(); }
+        internal void BindSession() { if (session == null) { session = inventory.Session; session.ExtractionSettled += Settled; } }
         private void OnDestroy() { if (session != null) session.ExtractionSettled -= Settled; }
         private void Settled(QusapRaidInventoryState state)
         {

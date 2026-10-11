@@ -41,6 +41,12 @@ namespace Qusap
             if (Receiver.IsEliminated) RetryDeathSettlement();
         }
         private void Depleted(QusapHealthChange _) => State?.BlockOperations();
+        internal void BindDeployment(QusapRaidSession raid, QusapRaidInventoryState state, QusapRaidWeaponAdapter adapter)
+        {
+            if (State != null || state.ParticipantId != participantId || state.ProfileId != profileId || !adapter.BelongsTo(raid.World, state))
+                throw new System.InvalidOperationException("Deployment binding mismatch");
+            session = raid; State = state; WeaponAdapter = adapter;
+        }
         private void Eliminated(QusapHitReceiver _) { State?.BlockOperations(); RetryDeathSettlement(); }
         public QusapLootResult RetryDeathSettlement() => State != null && Receiver.IsEliminated
             ? session.SettleDeath(State, WeaponAdapter) : QusapLootResult.Blocked;

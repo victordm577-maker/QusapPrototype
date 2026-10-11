@@ -20,9 +20,13 @@ namespace Qusap
             raid = bootstrap; participantLimit = limit;
         }
         private void Start()
+        { if (raid.Session != null) InitializeSession(); }
+        public void InitializeSession()
         {
+            if (Authority != null) return;
             ledger = raid.Session;
             Authority = new QusapRaidSessionAuthority(ledger.World.RaidId, participantLimit);
+            Authority.SessionFinished += _ => ledger.FinishSession();
             foreach (var player in raid.Participants)
             {
                 if (player == null || player.State == null || player.Session != ledger || player.Receiver == null

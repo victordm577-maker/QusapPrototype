@@ -116,7 +116,7 @@ namespace Qusap.Tests
             var items = loaded.ReadStashSnapshot(loaded.ProfileId); Assert.That(items.Count, Is.EqualTo(4));
             foreach (var item in items) { Assert.That(item.Quantity, Is.EqualTo(expected[item.LootInstanceId])); var resolved = playground.Catalog.Definitions.Single(d => d.DefinitionId == item.DefinitionId); Assert.That(item.Rarity, Is.EqualTo(resolved.Rarity)); Assert.That(item.DisplayName, Is.EqualTo(resolved.DisplayName)); }
             Assert.That(items.Single(i => i.DefinitionId == crystal.DefinitionId).Rarity, Is.EqualTo(QusapLootRarity.Rare));
-            Assert.That(items.Select(i => i.LootInstanceId).Distinct().Count(), Is.EqualTo(items.Count)); Assert.That(loaded.SchemaVersion, Is.EqualTo(1)); Assert.That(loaded.Storage.Writes, Is.Zero); Assert.That(File.ReadAllText(repository.Storage.MainPath), Is.EqualTo(original));
+            Assert.That(items.Select(i => i.LootInstanceId).Distinct().Count(), Is.EqualTo(items.Count)); Assert.That(loaded.SchemaVersion, Is.EqualTo(2)); Assert.That(loaded.Storage.Writes, Is.Zero); Assert.That(File.ReadAllText(repository.Storage.MainPath), Is.EqualTo(original));
         }
         [UnityTest] public IEnumerator PhysicalDeathDropsWholeMaterialStackAndPersistsProtectedRelicOnlyOnce()
         {

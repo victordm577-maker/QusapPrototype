@@ -181,7 +181,7 @@ namespace Qusap.Tests
             material.ConfigureMetadata(QusapLootRarity.Rare, 10, 8, "raid_pickup_rare");
             var loaded = new QusapPersistentStashRepository(directory, new[] { material }); var snapshot = loaded.ReadStashSnapshot(loaded.ProfileId).Single();
             Assert.That(snapshot.LootInstanceId, Is.EqualTo(item.LootInstanceId)); Assert.That(snapshot.Quantity, Is.EqualTo(7)); Assert.That(snapshot.Rarity, Is.EqualTo(QusapLootRarity.Rare));
-            Assert.That(loaded.SchemaVersion, Is.EqualTo(1)); Assert.That(loaded.Storage.Writes, Is.Zero); Assert.That(File.ReadAllText(repo.Storage.MainPath), Is.EqualTo(before)); Assert.That(before, Does.Not.Contain("Rarity"));
+            Assert.That(loaded.SchemaVersion, Is.EqualTo(2)); Assert.That(loaded.Storage.Writes, Is.Zero); Assert.That(File.ReadAllText(repo.Storage.MainPath), Is.EqualTo(before)); Assert.That(before, Does.Not.Contain("Rarity"));
         }
         [Test] public void ApprovedLegacyV1WithoutQuantityLoadsExactlyWithoutWriting()
         {
@@ -193,7 +193,7 @@ namespace Qusap.Tests
             Assert.That(QusapProfileCodec.Encode(decoded), Is.EqualTo(json));
             var repo = new QusapPersistentStashRepository(directory, new[] { fragment }); var item = repo.ReadStashSnapshot(repo.ProfileId).Single();
             Assert.That(item.LootInstanceId, Is.EqualTo("legacy-raid/loot/7")); Assert.That(item.DefinitionId, Is.EqualTo("raid_fragment")); Assert.That(item.Quantity, Is.EqualTo(1));
-            Assert.That(repo.Storage.Source, Is.EqualTo(QusapProfileLoadSource.Main)); Assert.That(repo.SchemaVersion, Is.EqualTo(1)); Assert.That(repo.Storage.Writes, Is.Zero); Assert.That(File.ReadAllText(path), Is.EqualTo(json));
+            Assert.That(repo.Storage.Source, Is.EqualTo(QusapProfileLoadSource.Main)); Assert.That(repo.SchemaVersion, Is.EqualTo(2)); Assert.That(repo.Storage.Writes, Is.Zero); Assert.That(File.ReadAllText(path), Is.EqualTo(json));
         }
         [Test] public void DeathAndExtractionApplyExplicitDropAndStashRulesToWholeStacks()
         {

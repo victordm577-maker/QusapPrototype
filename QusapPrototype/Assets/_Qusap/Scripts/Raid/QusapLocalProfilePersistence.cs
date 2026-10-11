@@ -11,6 +11,14 @@ namespace Qusap
     {
         [SerializeField] private string localParticipantId = "P1";
         public QusapPersistentStashRepository Repository { get; private set; }
+        public string IsolatedPlaygroundDirectory { get; private set; }
+        public void ConfigureIsolatedPlayground(string directory)
+        {
+            if (Repository != null || GetComponent<QusapRaidLoadoutPlayground>() == null
+                || !Path.IsPathRooted(directory) || Path.GetFullPath(directory) == Path.GetFullPath(ProductionDirectory))
+                throw new InvalidOperationException("An isolated diagnostic playground directory is required");
+            IsolatedPlaygroundDirectory = directory;
+        }
 #if UNITY_EDITOR
         // Test fixture injection. No persisted editor preference and no production path is touched.
         public static string IsolatedStorageDirectory { get; set; }
@@ -32,7 +40,7 @@ namespace Qusap
         public void Initialize(QusapRaidBootstrap raid)
         {
             if (Repository != null) return;
-            Repository = new QusapPersistentStashRepository(StorageDirectory(), raid.Definitions);
+            Repository = new QusapPersistentStashRepository(IsolatedPlaygroundDirectory ?? StorageDirectory(), raid.Definitions);
             var local = raid.Participants.Single(p => p.ParticipantId == localParticipantId);
             local.Configure(local.ParticipantId, Repository.ProfileId, local.BackpackCapacity);
             var weapons = FindAnyObjectByType<QusapWeaponMatchBootstrap>();

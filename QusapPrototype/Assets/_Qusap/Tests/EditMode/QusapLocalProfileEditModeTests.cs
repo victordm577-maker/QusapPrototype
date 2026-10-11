@@ -188,13 +188,13 @@ namespace Qusap.Tests
         { SaveFirst(); Rewrite(c => c.NextItemInstanceId = 1); Open(); Assert.That(repository.ReadStashSnapshot(Profile), Is.Empty); Assert.That(repository.Storage.CanWrite, Is.False); }
         [Test] public void FutureMainIsPreservedAndNeverReplacedByValidOldBackup()
         {
-            SaveFirst(); File.Copy(Main, Main + ".bak"); Rewrite(c => c.SchemaVersion = 2); string future = File.ReadAllText(Main); Open();
+            SaveFirst(); File.Copy(Main, Main + ".bak"); Rewrite(c => c.SchemaVersion = 3); string future = File.ReadAllText(Main); Open();
             Assert.That(repository.Storage.CanWrite, Is.False); Assert.That(repository.LastResult, Does.Contain("Incompatible future"));
             Bag(); Assert.That(raid.SettleExtraction(player), Is.EqualTo(QusapLootResult.StashUnavailable)); Assert.That(File.ReadAllText(Main), Is.EqualTo(future));
         }
         [Test] public void FutureBackupIsPreservedEvenWhenMainIsValid()
         {
-            SaveFirst(); var future = Document(); future.Content.SchemaVersion = 2;
+            SaveFirst(); var future = Document(); future.Content.SchemaVersion = 3;
             string futureBytes = QusapProfileCodec.Encode(QusapProfileCodec.Seal(future.Content)); File.WriteAllText(Main + ".bak", futureBytes); Open();
             Assert.That(repository.Revision, Is.EqualTo(1)); Assert.That(repository.Storage.CanWrite, Is.False); Assert.That(File.ReadAllText(Main + ".bak"), Is.EqualTo(futureBytes));
         }

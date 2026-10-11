@@ -10,6 +10,28 @@ namespace Qusap
         internal readonly object Gate = new();
         private readonly Dictionary<string, QusapLootInstance> items = new(StringComparer.Ordinal);
         private ulong sequence;
+        private readonly List<QusapRaidWeaponAdapter> weaponAdapters = new();
+        public int LoanersCreated { get; private set; }
+        public int LoanersDestroyed { get; private set; }
+        internal void RegisterAdapter(QusapRaidWeaponAdapter adapter) => weaponAdapters.Add(adapter);
+        internal void RemoveAdapter(QusapRaidWeaponAdapter adapter) => weaponAdapters.Remove(adapter);
+        public QusapLootInstance CreateLoaner(QusapLootDefinition definition, QusapWeaponInstance native)
+        {
+            if (definition?.DefinitionId != "raid_qusap_sword_blue") throw new ArgumentException("Use the approved basic sword canonical");
+            var item = Create(definition, "RaidLoaner", native); item.RaidLoaner = true; LoanersCreated++; return item;
+        }
+        public void DiscardLoaners(bool onlyResolved = false)
+        {
+            lock (Gate)
+            {
+                foreach (var item in items.Values.Where(i => i.RaidLoaner && !i.Weapon.IsRetired && (!onlyResolved || i.Location == QusapLootLocation.Consumed)))
+                {
+                    var adapter = weaponAdapters.FirstOrDefault(a => ReferenceEquals(a.CurrentWeapon, item.Weapon));
+                    if (adapter != null && !adapter.TryRelease(item.Weapon)) throw new InvalidOperationException("Loaner cleanup must release native ownership");
+                    item.Weapon.RetireFromRaid(); Move(item, QusapLootLocation.Consumed); LoanersDestroyed++;
+                }
+            }
+        }
         public QusapLootWorld(string raidId, ulong nextItemInstanceId = 1)
         {
             RaidId = !string.IsNullOrWhiteSpace(raidId) ? raidId : throw new ArgumentException(nameof(raidId));
@@ -46,6 +68,15 @@ namespace Qusap
         }
 
         public QusapLootInstance Get(string id) { lock (Gate) return id != null && items.TryGetValue(id, out var item) ? item : null; }
+        // Import the actual withdrawn instance; no clone, new ID, pickup merge or second inventory.
+        internal bool CanImport(IEnumerable<QusapLootInstance> incoming)
+        {
+            var list = incoming.ToArray();
+            return list.All(i => i != null && !items.ContainsKey(i.LootInstanceId) && !i.RaidLoaner
+                && (i.Weapon == null || (i.Weapon.IsFree && !items.Values.Any(j => j.Weapon?.InstanceId == i.Weapon.InstanceId))))
+                && list.Select(i => i.LootInstanceId).Distinct().Count() == list.Length;
+        }
+        internal void Import(QusapLootInstance item) { items.Add(item.LootInstanceId, item); }
         public QusapLootInstance FindWeapon(QusapWeaponInstance weapon)
         { lock (Gate) return items.Values.FirstOrDefault(i => ReferenceEquals(i.Weapon, weapon) && weapon != null); }
         internal QusapLootInstance[] Find(QusapLootLocation location, string holder)
@@ -80,7 +111,7 @@ namespace Qusap
                 int slot;
                 if (target == QusapLootLocation.SecurePocket)
                 {
-                    if (!item.Definition.CanEnterSecurePocket) return QusapLootResult.Ineligible;
+                    if (item.RaidLoaner || !item.Definition.CanEnterSecurePocket) return QusapLootResult.Ineligible;
                     if (Find(target, destination.ParticipantId).Length != 0) return QusapLootResult.Occupied;
                     slot = 0;
                 }

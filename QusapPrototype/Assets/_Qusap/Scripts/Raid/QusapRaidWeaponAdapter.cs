@@ -19,6 +19,7 @@ namespace Qusap
             this.world = world; this.inventory = inventory; this.equipment = equipment; this.definitions = definitions;
             inventory.BindEquipment(() => equipment.EquippedWeapon);
             equipment.WeaponTransitioned += Transitioned;
+            world.RegisterAdapter(this);
             TrackEquipped();
         }
         public QusapWeaponInstance CurrentWeapon => equipment.EquippedWeapon;
@@ -118,6 +119,11 @@ namespace Qusap
             }
             world.Notify(); return QusapLootResult.Success;
         }
-        public void Dispose() { if (equipment != null) equipment.WeaponTransitioned -= Transitioned; }
+        public void Dispose()
+        {
+            var current = equipment != null ? CurrentWeapon : null;
+            if (current != null && world.FindWeapon(current)?.RaidLoaner == true) TryRelease(current);
+            world.RemoveAdapter(this); if (equipment != null) equipment.WeaponTransitioned -= Transitioned;
+        }
     }
 }

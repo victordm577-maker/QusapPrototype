@@ -5,13 +5,14 @@ using System.Linq;
 
 namespace Qusap
 {
-    public sealed class QusapPersistentStashRepository : IQusapStashRepository
+    public sealed partial class QusapPersistentStashRepository : IQusapStashRepository
     {
         private readonly object gate = new();
         private readonly QusapMemoryStashRepository authority = new();
         private readonly List<QusapLootWorld> allocators = new();
         private Func<ulong> nativeAllocator;
         private QusapProfileContent committed;
+        private readonly QusapProfileCodec codec;
         public QusapProfileFileStore Storage { get; }
         public string ProfileId => committed.ProfileId;
         public int SchemaVersion => committed.SchemaVersion;
@@ -24,14 +25,17 @@ namespace Qusap
         public QusapPersistentStashRepository(string directory, IReadOnlyList<QusapLootDefinition> definitions,
             string newProfileId = null, IQusapProfileFiles files = null)
         {
-            var codec = new QusapProfileCodec(definitions);
+            codec = new QusapProfileCodec(definitions);
             Storage = new QusapProfileFileStore(directory, codec, files);
             var document = Storage.Load();
             committed = document?.Content ?? new QusapProfileContent
             { ProfileId = newProfileId ?? Guid.NewGuid().ToString("N"), SavedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) };
             Checksum = document?.Checksum ?? QusapProfileCodec.Seal(committed).Checksum;
             if (document != null) authority.Restore(ProfileId, codec.Restore(committed), committed.Settlements);
+            // Valid v1 loads migrate deterministically in memory; disk and its only valid backup remain untouched.
+            committed.SchemaVersion = 2;
             LastResult = Storage.LastResult;
+            if (committed.ActiveDeploymentManifest != null) TryRecoverInterruptedDeployment();
         }
 
         internal void ObserveAllocator(QusapLootWorld world) { lock (gate) allocators.Add(world); }
@@ -47,7 +51,9 @@ namespace Qusap
                 bool prepared = false;
                 bool accepted = authority.TryCommitSettlement(settlementId, profileId, items, () =>
                 {
-                    if (items.Count == 0) return true;
+                    bool resolvesDeployment = committed.ActiveDeploymentManifest != null
+                        && settlementId.StartsWith(committed.ActiveDeploymentManifest.RaidId + "/", StringComparison.Ordinal);
+                    if (items.Count == 0 && !resolvesDeployment) return true;
                     prepared = true;
                     var stash = authority.ReadStashSnapshot(profileId).Select(QusapProfileItem.From)
                         .Concat(items.Select(item => QusapProfileItem.From(new QusapLootSnapshot(item)))).ToArray();
@@ -59,11 +65,11 @@ namespace Qusap
                     ulong maxNative = stash.Select(item => item.NativeWeaponInstanceId).DefaultIfEmpty(0UL).Max();
                     var receipts = authority.ReadReceipts(profileId)
                         .Where(r => r.Fingerprint.Split('\n').Length > 1 && r.Fingerprint.Split('\n')[1].Length > 0)
-                        .Append(new QusapProfileReceipt
+                        .Concat(items.Count == 0 ? Array.Empty<QusapProfileReceipt>() : new[] { new QusapProfileReceipt
                         {
                             SettlementId = settlementId,
                             Fingerprint = profileId + "\n" + string.Join("\n", items.Select(i => i.LootInstanceId).OrderBy(id => id, StringComparer.Ordinal))
-                        }).ToArray();
+                        } }).ToArray();
                     var candidate = new QusapProfileContent
                     {
                         ProfileId = ProfileId, Revision = checked(Revision + 1),
@@ -72,6 +78,8 @@ namespace Qusap
                         NextNativeWeaponInstanceId = Math.Max(Math.Max(committed.NextNativeWeaponInstanceId,
                             nativeAllocator?.Invoke() ?? 1), checked(maxNative + 1)),
                         Stash = stash, Settlements = receipts
+                        , ActiveDeploymentManifest = resolvesDeployment ? null : committed.ActiveDeploymentManifest,
+                        RecoveryReason = committed.RecoveryReason
                     };
                     var document = QusapProfileCodec.Seal(candidate);
                     if (!Storage.TryWrite(document)) { LastResult = Storage.LastResult; return false; }

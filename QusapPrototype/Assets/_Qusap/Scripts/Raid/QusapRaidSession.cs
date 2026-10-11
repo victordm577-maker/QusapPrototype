@@ -17,6 +17,9 @@ namespace Qusap
             persistent?.ObserveAllocator(World);
         }
         public QusapLootWorld World { get; }
+        public bool IsFinished { get; private set; }
+        internal QusapRaidInventoryState FindParticipant(string id)
+        { lock (World.Gate) return id != null && inventories.TryGetValue(id, out var state) ? state : null; }
         public IQusapStashRepository Stash { get; }
         public IReadOnlyList<QusapDeathLootRecord> Containers { get { lock (World.Gate) return containers.Values.ToArray(); } }
         public event Action<QusapDeathLootRecord> DeathSettled;
@@ -127,7 +130,7 @@ namespace Qusap
             World.Notify();
             return QusapLootResult.Success;
         }
-        public void FinishSession() => World.DiscardLoaners();
+        public void FinishSession() { lock (World.Gate) { IsFinished = true; World.DiscardLoaners(); } }
         public void Dispose()
         { FinishSession(); foreach (var state in inventories.Values) state.Dispose(); DeathSettled = null; ExtractionSettled = null; }
     }

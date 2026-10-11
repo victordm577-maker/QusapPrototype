@@ -7,7 +7,7 @@ namespace Qusap
     public enum QusapLootCategory { Material = 0, Relic = 1, Consumable = 2, Weapon = 3, Armor = 4, Fragment = Material, Horn = 5, Objective = 6 }
     public enum QusapLootRarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4 }
     public enum QusapConsumableType { None, Healing }
-    public enum QusapLootLocation { World, Backpack, SecurePocket, Equipped, DeathContainer, Stash, Consumed, Merged }
+    public enum QusapLootLocation { World, Backpack, SecurePocket, Equipped, DeathContainer, Stash, Consumed, Merged, WorldContainer }
     public enum QusapLootResult { Success, Missing, InvalidSource, InvalidDestination, Full, Occupied, Ineligible, Blocked, Reserved, NoEffect, EquipmentRejected, StashUnavailable }
     public enum QusapRaidInventoryStatus { Active, Blocked, SettlementPending, Settled, ExtractionPending, Extracted }
 

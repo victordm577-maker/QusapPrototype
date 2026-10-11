@@ -140,9 +140,8 @@ namespace Qusap
                 error = "Invalid or duplicate InstanceId";
                 if (item == null || string.IsNullOrWhiteSpace(item.InstanceId) || item.InstanceId.Contains('\n')
                     || !ids.Add(item.InstanceId) || string.IsNullOrWhiteSpace(item.RaidId) || item.Provenance == null
-                    || !item.InstanceId.StartsWith(item.RaidId + "/loot/", StringComparison.Ordinal)
-                    || !ulong.TryParse(item.InstanceId.Substring(item.RaidId.Length + 6), NumberStyles.None,
-                        CultureInfo.InvariantCulture, out ulong suffix) || suffix == 0 || suffix >= c.NextItemInstanceId
+                    || !QusapRaidInstanceIdentity.TryValidate(item.RaidId, item.InstanceId, out ulong suffix)
+                    || (suffix == 0 && c.SchemaVersion == 1) || (suffix > 0 && suffix >= c.NextItemInstanceId)
                     || (previous != null && StringComparer.Ordinal.Compare(previous, item.InstanceId) >= 0)) return false;
                 previous = item.InstanceId;
                 error = "Unknown DefinitionId: " + item.DefinitionId;

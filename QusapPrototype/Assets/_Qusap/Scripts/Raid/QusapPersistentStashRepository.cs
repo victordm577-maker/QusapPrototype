@@ -59,8 +59,12 @@ namespace Qusap
                         .Concat(items.Select(item => QusapProfileItem.From(new QusapLootSnapshot(item)))).ToArray();
                     ulong nextItem = Math.Max(committed.NextItemInstanceId,
                         allocators.Select(a => a.NextItemInstanceId).DefaultIfEmpty(1UL).Max());
-                    ulong maxItem = stash.Select(item => ulong.Parse(item.InstanceId.Substring(item.RaidId.Length + 6),
-                        NumberStyles.None, CultureInfo.InvariantCulture)).DefaultIfEmpty(0UL).Max();
+                    ulong maxItem = stash.Select(item =>
+                    {
+                        if (!QusapRaidInstanceIdentity.TryValidate(item.RaidId, item.InstanceId, out ulong counter))
+                            throw new InvalidOperationException("Invalid raid instance identity");
+                        return counter;
+                    }).DefaultIfEmpty(0UL).Max();
                     nextItem = Math.Max(nextItem, checked(maxItem + 1));
                     ulong maxNative = stash.Select(item => item.NativeWeaponInstanceId).DefaultIfEmpty(0UL).Max();
                     var receipts = authority.ReadReceipts(profileId)

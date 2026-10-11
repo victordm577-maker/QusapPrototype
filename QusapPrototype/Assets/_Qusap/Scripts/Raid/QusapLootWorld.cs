@@ -5,7 +5,7 @@ using System.Linq;
 namespace Qusap
 {
     // One ledger per raid. Reservations also protect against synchronous callback reentry.
-    public sealed class QusapLootWorld
+    public sealed partial class QusapLootWorld
     {
         internal readonly object Gate = new();
         private readonly Dictionary<string, QusapLootInstance> items = new(StringComparer.Ordinal);

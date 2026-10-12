@@ -7,7 +7,7 @@ namespace Qusap
     public enum QusapLootCategory { Material = 0, Relic = 1, Consumable = 2, Weapon = 3, Armor = 4, Fragment = Material, Horn = 5, Objective = 6 }
     public enum QusapLootRarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4 }
     public enum QusapConsumableType { None, Healing }
-    public enum QusapLootLocation { World, Backpack, SecurePocket, Equipped, DeathContainer, Stash, Consumed, Merged, WorldContainer }
+    public enum QusapLootLocation { World, Backpack, SecurePocket, Equipped, DeathContainer, Stash, Consumed, Merged, WorldContainer, Destroyed }
     public enum QusapLootResult { Success, Missing, InvalidSource, InvalidDestination, Full, Occupied, Ineligible, Blocked, Reserved, NoEffect, EquipmentRejected, StashUnavailable }
     public enum QusapRaidInventoryStatus { Active, Blocked, SettlementPending, Settled, ExtractionPending, Extracted }
 
@@ -25,6 +25,8 @@ namespace Qusap
         public string Provenance { get; }
         public QusapWeaponInstance Weapon { get; }
         public bool RaidLoaner { get; internal set; }
+        // Cleanup provenance only; current ownership is still exclusively Location/HolderId.
+        internal string LoanerLastCarrierId { get; set; }
         public bool CanPersist => !RaidLoaner && Definition.CanPersistInStash;
         public int Quantity { get; internal set; }
         public QusapLootLocation Location { get; internal set; }
@@ -72,10 +74,11 @@ namespace Qusap
 
     public sealed class QusapDeathLootRecord
     {
-        internal QusapDeathLootRecord(string id, string participant, QusapLootSnapshot[] transferred)
-        { ContainerId = id; ParticipantId = participant; InitialTransferredSnapshot = Array.AsReadOnly(transferred); }
+        internal QusapDeathLootRecord(string id, string participant, QusapLootSnapshot[] transferred, ulong eliminationOrdinal = 1)
+        { ContainerId = id; ParticipantId = participant; EliminationOrdinal = eliminationOrdinal; InitialTransferredSnapshot = Array.AsReadOnly(transferred); }
         public string ContainerId { get; }
         public string ParticipantId { get; }
+        public ulong EliminationOrdinal { get; }
         public IReadOnlyList<QusapLootSnapshot> InitialTransferredSnapshot { get; }
     }
 }

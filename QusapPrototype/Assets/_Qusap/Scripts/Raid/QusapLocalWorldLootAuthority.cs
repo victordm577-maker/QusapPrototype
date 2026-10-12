@@ -5,10 +5,14 @@ using System.Threading;
 
 namespace Qusap
 {
-    public sealed class QusapLocalWorldLootAuthority : IQusapWorldLootAuthority
+    public sealed partial class QusapLocalWorldLootAuthority : IQusapWorldLootAuthority
     {
         private sealed class Spawn
-        { public string Id; public QusapWorldLootRecipe Recipe; public bool Opened, Generating; public long Version; public int Generations; }
+        {
+            public string Id; public QusapWorldLootRecipe Recipe; public bool Opened, Generating; public long Version; public int Generations;
+            public QusapDeathLootRecord Death; public QusapLootSnapshot[] PreviousDeathContents;
+            public QusapLootLocation Location => Death != null ? QusapLootLocation.DeathContainer : QusapLootLocation.WorldContainer;
+        }
         private readonly QusapRaidSession session;
         private readonly QusapRaidLootCatalog catalog;
         private readonly Func<QusapLootDefinition, QusapWeaponInstance> weapons;
@@ -53,15 +57,21 @@ namespace Qusap
                 if (cancellation.IsCancellationRequested) return Reject(QusapWorldLootResult.Cancelled);
                 var valid = Validate(request.ParticipantId, request.SpawnPointId, out _, out var source);
                 if (valid != QusapWorldLootResult.Success) return Reject(valid);
+                RefreshDeathVersion(source);
+                if (source.Death != null && source.PreviousDeathContents.Length == 0) return Reject(QusapWorldLootResult.MissingInstance);
                 if (source.Opened) return new QusapWorldLootReply(QusapWorldLootResult.Success);
                 if (source.Generating) return Reject(QusapWorldLootResult.Reserved);
                 source.Generating = true;
                 try
                 {
-                    var rolls = source.Recipe.Resolve(RaidId, source.Id, Seed);
-                    if (!session.World.CreateWorldContainerItems(source.Id, rolls, weapons, cancellation))
-                        return Reject(cancellation.IsCancellationRequested ? QusapWorldLootResult.Cancelled : QusapWorldLootResult.GenerationRejected);
-                    source.Opened = true; source.Generations++; source.Version++;
+                    if (source.Death == null)
+                    {
+                        var rolls = source.Recipe.Resolve(RaidId, source.Id, Seed);
+                        if (!session.World.CreateWorldContainerItems(source.Id, rolls, weapons, cancellation))
+                            return Reject(cancellation.IsCancellationRequested ? QusapWorldLootResult.Cancelled : QusapWorldLootResult.GenerationRejected);
+                        source.Generations++;
+                    }
+                    source.Opened = true; source.Version++;
                 }
                 catch { return Reject(QusapWorldLootResult.GenerationRejected); }
                 finally { source.Generating = false; }
@@ -76,11 +86,13 @@ namespace Qusap
                 if (cancellation.IsCancellationRequested) return Reject(QusapWorldLootResult.Cancelled, request.InstanceId);
                 var valid = Validate(request.ParticipantId, request.SpawnPointId, out var inventory, out var source);
                 if (valid != QusapWorldLootResult.Success) return Reject(valid, request.InstanceId);
+                RefreshDeathVersion(source);
                 if (!source.Opened) return Reject(QusapWorldLootResult.NotOpened, request.InstanceId);
                 if (request.ExpectedVersion != source.Version) return Reject(QusapWorldLootResult.StaleRequest, request.InstanceId);
-                reply = session.World.TransferWorldContainer(inventory, source.Id, request.InstanceId, request.Quantity, cancellation);
+                reply = session.World.TransferWorldContainer(inventory, source.Id, request.InstanceId, request.Quantity, cancellation, source.Location);
                 if (!reply.Confirmed) return Reject(reply.Result, request.InstanceId);
                 source.Version++; ConfirmedTransfers++;
+                if (source.Death != null) source.PreviousDeathContents = ReadSourceContents(source);
             }
             session.World.Notify(); return reply;
         }
@@ -89,9 +101,11 @@ namespace Qusap
             lock (session.World.Gate)
             {
                 if (spawnPointId == null || !spawns.TryGetValue(spawnPointId, out var spawn)) return null;
-                var items = session.World.Find(QusapLootLocation.WorldContainer, spawnPointId).Select(i => new QusapLootSnapshot(i)).ToArray();
-                var state = !spawn.Opened ? QusapWorldLootState.Unopened : items.Length == 0 ? QusapWorldLootState.Depleted : QusapWorldLootState.Opened;
-                return new QusapWorldLootContainerSnapshot(RaidId, Seed, spawn.Id, spawn.Recipe.TableId, state, spawn.Version, spawn.Generations, items);
+                RefreshDeathVersion(spawn);
+                var items = ReadSourceContents(spawn);
+                var state = (spawn.Death != null && items.Length == 0) ? QusapWorldLootState.Depleted
+                    : !spawn.Opened ? QusapWorldLootState.Unopened : items.Length == 0 ? QusapWorldLootState.Depleted : QusapWorldLootState.Opened;
+                return new QusapWorldLootContainerSnapshot(RaidId, spawn.Death == null ? Seed : 0, spawn.Id, spawn.Recipe?.TableId ?? string.Empty, state, spawn.Version, spawn.Generations, items);
             }
         }
     }

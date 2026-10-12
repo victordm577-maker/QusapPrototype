@@ -109,7 +109,7 @@ namespace Qusap.Tests
             yield return Tick(); Assert.That(events, Is.EqualTo(1)); Assert.That(Model.SessionFinishedEvents, Is.EqualTo(1));
             Assert.That(Model.FinalResult, Is.SameAs(result)); Assert.That(raid.Session.ExtractionTransfersResolved, Is.EqualTo(1));
             Assert.That(raid.Session.Containers.Count, Is.EqualTo(1)); Assert.That(raid.ContainerViews.Count, Is.EqualTo(1));
-            Assert.That(deathLoot.Location, Is.EqualTo(QusapLootLocation.DeathContainer)); Assert.That(safe.Location, Is.EqualTo(QusapLootLocation.Stash));
+            Assert.That(deathLoot.Location, Is.EqualTo(QusapLootLocation.Destroyed)); Assert.That(safe.Location, Is.EqualTo(QusapLootLocation.Stash));
             Assert.That(extractedLoot.Location, Is.EqualTo(QusapLootLocation.Stash));
             for (int i = 0; i < 2; i++) CollectionAssert.AreEqual(stashBefore[i], players[i].ReadStashSnapshot().Select(x => x.LootInstanceId));
         }

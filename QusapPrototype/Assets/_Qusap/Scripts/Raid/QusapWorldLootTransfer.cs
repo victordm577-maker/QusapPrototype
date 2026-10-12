@@ -32,12 +32,13 @@ namespace Qusap
 
         // Exact requested quantity or no changes. The caller holds this same ledger's gate.
         internal QusapWorldLootReply TransferWorldContainer(QusapRaidInventoryState destination, string spawn, string id,
-            int quantity, CancellationToken cancellation)
+            int quantity, CancellationToken cancellation, QusapLootLocation sourceLocation = QusapLootLocation.WorldContainer)
         {
             QusapWorldLootReply Reject(QusapWorldLootResult result) => new(result, id);
             var item = Get(id);
             if (item == null) return Reject(QusapWorldLootResult.MissingInstance);
-            if (item.Location != QusapLootLocation.WorldContainer || item.HolderId != spawn) return Reject(QusapWorldLootResult.InvalidSource);
+            if ((sourceLocation != QusapLootLocation.WorldContainer && sourceLocation != QusapLootLocation.DeathContainer)
+                || item.Location != sourceLocation || item.HolderId != spawn) return Reject(QusapWorldLootResult.InvalidSource);
             if (item.Reserved) return Reject(QusapWorldLootResult.Reserved);
             if (!item.Definition.CanEnterBackpack || item.RaidLoaner || item.Weapon?.IsEquipped == true) return Reject(QusapWorldLootResult.Ineligible);
             if (quantity < 1 || quantity > item.Quantity || (!item.Definition.IsStackable && quantity != 1)) return Reject(QusapWorldLootResult.InvalidQuantity);

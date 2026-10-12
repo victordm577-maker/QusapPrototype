@@ -14,6 +14,7 @@ namespace Qusap
         [SerializeField] private QusapRaidLootCatalog lootCatalog;
         [SerializeField] private QusapDeathLootContainer deathContainerPrefab;
         [SerializeField] private bool deferForDeployment;
+        [SerializeField] private string diagnosticRaidId;
         private readonly List<QusapDeathLootContainer> views = new();
         public QusapRaidSession Session { get; private set; }
         public IReadOnlyList<QusapRaidInventory> Participants => participants;
@@ -22,6 +23,12 @@ namespace Qusap
         public QusapRaidLootCatalog LootCatalog => lootCatalog;
         public void Configure(QusapRaidInventory[] players, QusapLootDefinition[] loot, QusapDeathLootContainer prefab, QusapRaidLootCatalog catalog = null)
         { participants = players; definitions = loot; deathContainerPrefab = prefab; lootCatalog = catalog; }
+        public void ConfigureMemoryRaidId(string id)
+        {
+            if (Session != null || string.IsNullOrWhiteSpace(id) || GetComponent<QusapLocalProfilePersistence>() != null)
+                throw new InvalidOperationException("A diagnostic ID is only configurable before initializing a memory-only raid.");
+            diagnosticRaidId = id;
+        }
         private void Awake()
         {
             if (lootCatalog != null)
@@ -33,7 +40,7 @@ namespace Qusap
             var profile = GetComponent<QusapLocalProfilePersistence>();
             profile?.Initialize(this);
             if (deferForDeployment) return;
-            Session = new QusapRaidSession(Guid.NewGuid().ToString("N"), profile?.Repository);
+            Session = new QusapRaidSession(profile == null && !string.IsNullOrWhiteSpace(diagnosticRaidId) ? diagnosticRaidId : Guid.NewGuid().ToString("N"), profile?.Repository);
             Session.DeathSettled += SpawnContainer;
         }
         private void Start()

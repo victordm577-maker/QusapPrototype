@@ -188,10 +188,12 @@ namespace Qusap.Tests
             Assert.That(deployment.Inventory.TryPickup(item.LootInstanceId),Is.EqualTo(QusapLootResult.Success));Assert.That(deployment.WeaponAdapter.TryEquipWeaponFromBackpack(item.LootInstanceId),Is.EqualTo(QusapLootResult.Success));
             deployment.Session.FinishSession();Assert.That(item.Weapon.IsRetired,Is.True);Assert.That(equipment.HasWeapon,Is.False);Assert.That(item.Location,Is.EqualTo(QusapLootLocation.Consumed));Assert.That(equipment.TryEquip(item.Weapon,out _),Is.Not.EqualTo(QusapWeaponOperationResult.Success));
         }
-        [Test] public void LoanerMayTemporarilyEnterDeathContainerAndIsDestroyedExactlyOnce()
+        [Test] public void LoanerDeathDestroysImmediatelyAndNeverEntersTheContainer()
         {
             Deploy();deployment.StartRunning();var item=deployment.Session.World.FindWeapon(equipment.EquippedWeapon);deployment.Inventory.BlockOperations();deployment.Session.SettleDeath(deployment.Inventory,deployment.WeaponAdapter);
-            Assert.That(item.Location,Is.EqualTo(QusapLootLocation.DeathContainer));deployment.Session.FinishSession();deployment.Session.FinishSession();Assert.That(item.Location,Is.EqualTo(QusapLootLocation.Consumed));Assert.That(deployment.LoanersDestroyed,Is.EqualTo(1));Assert.That(repo.Revision,Is.Zero);
+            Assert.That(item.Location,Is.EqualTo(QusapLootLocation.Destroyed));Assert.That(item.Weapon.IsRetired,Is.True);
+            Assert.That(deployment.Session.Containers.Single().InitialTransferredSnapshot,Is.Empty);
+            deployment.Session.FinishSession();deployment.Session.FinishSession();Assert.That(item.Location,Is.EqualTo(QusapLootLocation.Destroyed));Assert.That(deployment.LoanersDestroyed,Is.EqualTo(1));Assert.That(repo.Revision,Is.Zero);
         }
         [Test] public void TwoRaidsCreateDistinctLoanerInstanceIdsWithoutReusingDefinitions()
         {

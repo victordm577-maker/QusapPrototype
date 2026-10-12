@@ -95,7 +95,11 @@ namespace Qusap
         internal void Release(IEnumerable<QusapLootInstance> requested)
         { foreach (var item in requested) item.Reserved = false; }
         internal void Move(QusapLootInstance item, QusapLootLocation location, string holder = null, int slot = -1)
-        { item.Location = location; item.HolderId = holder; item.SlotIndex = slot; }
+        {
+            item.Location = location; item.HolderId = holder; item.SlotIndex = slot;
+            if (item.RaidLoaner && holder != null && (location == QusapLootLocation.Backpack || location == QusapLootLocation.Equipped))
+                item.LoanerLastCarrierId = holder;
+        }
 
         internal QusapLootResult Transfer(QusapRaidInventoryState destination, string id,
             QusapLootLocation source, string sourceHolder, QusapLootLocation target)

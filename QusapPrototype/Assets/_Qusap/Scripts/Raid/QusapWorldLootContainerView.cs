@@ -8,14 +8,17 @@ namespace Qusap
         [SerializeField] private string spawnPointId;
         [SerializeField] private QusapWorldLootTable table;
         [SerializeField] private float interactionRadius = 2.75f;
+        [SerializeField] private bool requiresOpeningHold;
         private IQusapWorldLootAuthority authority;
         private Renderer visual;
         private MaterialPropertyBlock color;
         private int shownState = -1;
         public string SpawnPointId => spawnPointId;
         public QusapWorldLootTable Table => table;
+        public bool RequiresOpeningHold => requiresOpeningHold;
         public QusapWorldLootContainerSnapshot Snapshot => authority?.ReadContainer(spawnPointId);
         public void Configure(string id, QusapWorldLootTable data) { spawnPointId = id; table = data; }
+        public void RequireOpeningHold(bool required) => requiresOpeningHold = required;
         public void Bind(IQusapWorldLootAuthority owner) { authority = owner; visual = GetComponent<Renderer>(); color = new MaterialPropertyBlock(); }
         public bool CanReach(QusapRaidInventory player)
         {

@@ -117,9 +117,12 @@ namespace Qusap
                 LastRejection = target == null && !Incapacitated && session.Status == QusapRaidSessionStatus.Running ? Sensor.Validate(Sensor.NearestDiagnostic) : validation;
             var snapshot = target?.Snapshot;
             if (command.Held && snapshot?.State == QusapWorldLootState.Depleted) LastRejection = QusapLootInteractionRejection.Depleted;
-            bool complete = Progress.Advance(command.Held, target?.SpawnPointId, snapshot?.State == QusapWorldLootState.Unopened,
+            bool requiresHold = target != null && target.RequiresOpeningHold;
+            bool mayHold = snapshot?.State == QusapWorldLootState.Unopened
+                || (requiresHold && opened != target && snapshot?.State == QusapWorldLootState.Opened);
+            bool complete = Progress.Advance(command.Held, target?.SpawnPointId, mayHold,
                 validation, delta);
-            if (complete || (pressed && snapshot?.State == QusapWorldLootState.Opened && validation == QusapLootInteractionRejection.None))
+            if (complete || (!requiresHold && pressed && snapshot?.State == QusapWorldLootState.Opened && validation == QusapLootInteractionRejection.None))
             {
                 LastReply = authority.RequestOpen(new(PlayerId, target.SpawnPointId));
                 if (LastReply.Confirmed) { opened = target; LastRejection = QusapLootInteractionRejection.None; Observe(); }

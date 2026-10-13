@@ -12,6 +12,18 @@ namespace Qusap
             : JsonUtility.FromJson<QusapActiveDeploymentManifest>(JsonUtility.ToJson(committed.ActiveDeploymentManifest));
         public bool HasActiveDeployment => committed.ActiveDeploymentManifest != null || volatileDeploymentId != null;
         public string RecoveryReason => committed.RecoveryReason;
+        internal Action CaptureSharedRollback()
+        {
+            lock (gate)
+            {
+                if (HasActiveDeployment) throw new InvalidOperationException("Profile already deployed");
+                var restoreStorage = Storage.CaptureMemoryRollback(); var restoreAuthority = authority.CaptureRollback(ProfileId);
+                var content = committed; string checksum = Checksum, result = LastResult, deployment = volatileDeploymentId;
+                var previousAllocators = allocators.ToArray();
+                return () => { lock (gate) { restoreStorage(); restoreAuthority(); committed = content; Checksum = checksum;
+                    LastResult = result; volatileDeploymentId = deployment; allocators.Clear(); allocators.AddRange(previousAllocators); } };
+            }
+        }
         internal QusapLootInstance[] ReadOwnedInstances() => authority.ReadOwned(ProfileId);
 
         private QusapProfileContent Candidate()

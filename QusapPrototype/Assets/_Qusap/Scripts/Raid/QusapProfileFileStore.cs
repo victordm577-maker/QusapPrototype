@@ -51,6 +51,17 @@ namespace Qusap
         public string LastResult { get; private set; } = "Not loaded";
         public int Writes { get; private set; }
 
+        internal bool SupportsMemoryRollback => files is QusapMemoryProfileFiles;
+        internal Action CaptureMemoryRollback()
+        {
+            if (files is not QusapMemoryProfileFiles memory) throw new InvalidOperationException("Shared atomic deployment requires reversible storage.");
+            var snapshot = memory.Capture();
+            string main = loadedMain, backup = loadedBackup, result = LastResult;
+            bool canWrite = CanWrite; var source = Source; int writes = Writes;
+            return () => { memory.Restore(snapshot); loadedMain = main; loadedBackup = backup;
+                LastResult = result; CanWrite = canWrite; Source = source; Writes = writes; };
+        }
+
         public QusapProfileFileStore(string directory, QusapProfileCodec codec, IQusapProfileFiles files = null)
         {
             if (string.IsNullOrWhiteSpace(directory) || !Path.IsPathRooted(directory))

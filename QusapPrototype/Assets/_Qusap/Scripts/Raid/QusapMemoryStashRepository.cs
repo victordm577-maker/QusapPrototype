@@ -76,5 +76,26 @@ namespace Qusap
                 foreach (var receipt in receipts) settlements.Add(receipt.SettlementId, receipt.Fingerprint);
             }
         }
+
+        internal Action CaptureRollback(string profile)
+        {
+            lock (gate)
+            {
+                var savedItems = stored.ToArray(); var savedReceipts = settlements.ToArray();
+                var locations = ReadOwned(profile).Select(i => (item: i, snapshot: new QusapLootSnapshot(i), reserved: i.Reserved)).ToArray();
+                return () =>
+                {
+                    lock (gate)
+                    {
+                        stored.Clear(); settlements.Clear();
+                        foreach (var pair in savedItems) stored.Add(pair.Key, pair.Value);
+                        foreach (var pair in savedReceipts) settlements.Add(pair.Key, pair.Value);
+                        foreach (var saved in locations)
+                        { saved.item.Location = saved.snapshot.Location; saved.item.HolderId = saved.snapshot.HolderId;
+                            saved.item.SlotIndex = saved.snapshot.SlotIndex; saved.item.Quantity = saved.snapshot.Quantity; saved.item.Reserved = saved.reserved; }
+                    }
+                };
+            }
+        }
     }
 }

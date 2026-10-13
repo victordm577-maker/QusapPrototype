@@ -40,6 +40,16 @@ namespace Qusap
         }
         public string RaidId { get; }
         public ulong NextItemInstanceId { get { lock (Gate) return checked(sequence + 1); } }
+        internal void ReserveInstanceIdsThrough(ulong last) { lock (Gate) sequence = Math.Max(sequence, last); }
+        internal void AbortPreparedDeployment()
+        {
+            lock (Gate)
+            {
+                DiscardLoaners();
+                if (items.Values.Any(i => i.Weapon?.IsEquipped == true || i.Reserved)) throw new InvalidOperationException("Prepared ownership must be released before rollback");
+                items.Clear(); weaponAdapters.Clear(); Changed = null;
+            }
+        }
         public event Action Changed;
         public IReadOnlyList<QusapLootInstance> Instances { get { lock (Gate) return items.Values.ToArray(); } }
 

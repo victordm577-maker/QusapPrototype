@@ -35,6 +35,10 @@ namespace Qusap
         private readonly QusapLoadoutLimits limits;
         private QusapLoadoutStack[] consumables = Array.Empty<QusapLoadoutStack>();
         private bool selected, busy;
+        private bool ownsSession = true;
+        private QusapSharedRaidContext sharedContext;
+        public string ParticipantId => participant;
+        public QusapPersistentStashRepository Repository => stash;
         public string SelectedWeaponId { get; private set; }
         public IReadOnlyList<QusapLoadoutStack> SelectedConsumables => Array.AsReadOnly(consumables);
         public string DeploymentId { get; private set; }
@@ -86,32 +90,42 @@ namespace Qusap
             SelectedWeaponId = weaponId; consumables = (QusapLoadoutStack[])stacks.Clone(); selected = true;
             LastResult = "Prepared selection; stash and disk unchanged"; return true;
         }
-        public bool CommitDeployment()
+        public bool CommitDeployment() => sharedContext == null ? CommitCore(null) : Reject("Enlisted shared deployment must be committed by its context");
+        internal bool TryJoinShared(QusapSharedRaidContext context)
+        { if (sharedContext != null || Status != QusapDeploymentStatus.None) return false; sharedContext = context; return true; }
+        internal bool CommitShared(QusapSharedRaidContext context, QusapRaidSession session)
+            => ReferenceEquals(sharedContext, context) && CommitCore(session ?? throw new ArgumentNullException(nameof(session)));
+        private bool CommitCore(QusapRaidSession shared)
         {
             if (busy || !selected || Status != QusapDeploymentStatus.None || stash.HasActiveDeployment) return Reject("Deployment unavailable");
             busy = true;
+            QusapWeaponInstance loaner = null;
+            QusapRaidSession created = null;
+            bool delivered = false;
             try
             {
+                if (shared != null && (shared.IsFinished || shared.FindParticipant(participant) != null)) return Reject("Participant already registered or raid finished");
                 if (!Validate(SelectedWeaponId, consumables, out var items)) return false;
                 if (!equipment.TryInitialize() || equipment.HasWeapon) return Reject("Equipment must be initialized and empty");
                 var receiver = equipment.GetComponent<QusapHitReceiver>();
                 if (receiver != null && (receiver.IsHealthDepleted || receiver.IsGameplayRetired)) return Reject("Participant unavailable");
-                string deployment = Guid.NewGuid().ToString("N"), raidId = Guid.NewGuid().ToString("N");
+                string deployment = Guid.NewGuid().ToString("N"), raidId = shared?.World.RaidId ?? Guid.NewGuid().ToString("N");
                 var manifest = new QusapActiveDeploymentManifest { DeploymentId = deployment, RaidId = raidId, State = QusapDeploymentStatus.Prepared,
                     Items = items.Select(i => QusapProfileItem.From(new QusapLootSnapshot(i))).ToArray(), WeaponInstanceId = SelectedWeaponId,
                     CreatedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) };
                 // Allocate a loaner before committing, so a rejecting native factory cannot strand a durable withdrawal.
-                QusapWeaponInstance loaner = null; QusapLootDefinition basic = null;
+                QusapLootDefinition basic = null;
                 if (string.IsNullOrEmpty(SelectedWeaponId))
                 {
                     if (!catalog.TryResolve("raid_basic_sword", out basic)) return Reject("Missing canonical basic sword");
                     loaner = createNative(basic);
                     if (loaner == null || !loaner.IsFree || loaner.IsRetired || loaner.Definition.Id != basic.WeaponDefinitionId) return Reject("Invalid native loaner");
                 }
-                var session = new QusapRaidSession(raidId, stash);
-                if (!session.World.CanImport(items)) { session.Dispose(); return Reject("Ledger import rejected"); }
+                var session = shared ?? (created = new QusapRaidSession(raidId, stash));
+                if (!session.World.CanImport(items)) return Reject("Ledger import rejected");
                 if (!stash.TryCommitDeployment(manifest, items.Select(i => i.LootInstanceId).ToArray(), out var withdrawn))
-                { session.Dispose(); return Reject("Save rejected; stash and selection intact: " + stash.LastResult); }
+                    return Reject("Save rejected; stash and selection intact: " + stash.LastResult);
+                ownsSession = shared == null;
                 DeploymentId = deployment; Session = session; Inventory = session.Register(participant, stash.ProfileId);
                 Inventory.DeploymentLocked = true; WeaponAdapter = new QusapRaidWeaponAdapter(session.World, Inventory, equipment, catalog.Definitions);
                 int slot = 0;
@@ -130,23 +144,44 @@ namespace Qusap
                 }
                 Session.ExtractionSettled += Extracted; Session.DeathSettled += Eliminated;
                 Status = QusapDeploymentStatus.Prepared; LastResult = "Committed atomically; exact instances delivered after disk commit";
-                session.World.Notify(); return true;
+                delivered = true; if (ownsSession) session.World.Notify(); return true;
             }
-            finally { busy = false; }
+            finally
+            {
+                if (!delivered)
+                {
+                    if (loaner != null && loaner.IsFree && !loaner.IsRetired) loaner.RetireFromRaid();
+                    created?.Dispose();
+                }
+                busy = false;
+            }
         }
-        public bool StartRunning()
+        internal void RollbackShared(QusapSharedRaidContext context)
+        {
+            if (!ReferenceEquals(sharedContext, context) || ownsSession || Session == null) return;
+            Session.ExtractionSettled -= Extracted; Session.DeathSettled -= Eliminated;
+            var weapon = WeaponAdapter?.CurrentWeapon;
+            if (weapon != null && !WeaponAdapter.TryRelease(weapon)) throw new InvalidOperationException("Prepared equipment rollback failed");
+            WeaponAdapter?.Dispose(); Inventory?.Dispose();
+            Session = null; Inventory = null; WeaponAdapter = null; DeploymentId = null; Status = QusapDeploymentStatus.None;
+        }
+        public bool StartRunning() => sharedContext == null ? StartRunningCore(true) : Reject("Shared start belongs to its context");
+        internal bool StartSharedRunning(QusapSharedRaidContext context)
+            => ReferenceEquals(sharedContext, context) && StartRunningCore(false);
+        private bool StartRunningCore(bool activate)
         {
             if (busy || Status != QusapDeploymentStatus.Prepared) return Reject("Not Prepared");
             busy = true;
             try
             {
                 if (!stash.TryMarkDeploymentRunning(DeploymentId)) return Reject("Running save rejected");
-                Status = QusapDeploymentStatus.Running; Inventory.DeploymentLocked = false; LastResult = "Running; loadout locked"; return true;
+                Status = QusapDeploymentStatus.Running; Inventory.DeploymentLocked = !activate; LastResult = "Running; loadout locked"; return true;
             }
             finally { busy = false; }
         }
         public bool CancelDeployment()
         {
+            if (!ownsSession) return Reject("Shared deployment must be cancelled by its context");
             if (busy) return Reject("Transaction in progress");
             if (Status == QusapDeploymentStatus.Resolved) return true;
             if (Status == QusapDeploymentStatus.None) { selected = false; consumables = Array.Empty<QusapLoadoutStack>(); SelectedWeaponId = null; return true; }
@@ -184,7 +219,7 @@ namespace Qusap
         public void Dispose()
         {
             if (Session != null) { Session.ExtractionSettled -= Extracted; Session.DeathSettled -= Eliminated; }
-            Session?.Dispose(); WeaponAdapter?.Dispose();
+            if (ownsSession) Session?.Dispose(); WeaponAdapter?.Dispose();
         }
     }
 }

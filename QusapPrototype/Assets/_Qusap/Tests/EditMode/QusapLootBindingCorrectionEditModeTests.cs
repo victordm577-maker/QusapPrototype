@@ -35,6 +35,7 @@ namespace Qusap.Tests
                 .Select(p => p.Replace('\\', '/')).OrderBy(p => p, StringComparer.Ordinal).ToArray();
             Assert.That(installers, Is.EqualTo(new[] {
                 "Assets/_Qusap/Scripts/Raid/QusapRaidDeathLootContainerPlayground.cs",
+                "Assets/_Qusap/Scripts/Raid/QusapRaidEndToEndPlayground.cs",
                 "Assets/_Qusap/Scripts/Raid/QusapRaidLootInteractionPlayground.cs" }));
             string guid = AssetDatabase.AssetPathToGUID("Assets/_Qusap/Scripts/Raid/QusapLootInteractionInputBridge.cs");
             foreach (string path in Directory.GetFiles("Assets", "*.unity", SearchOption.AllDirectories)

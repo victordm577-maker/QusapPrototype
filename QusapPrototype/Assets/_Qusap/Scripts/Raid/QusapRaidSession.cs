@@ -19,6 +19,7 @@ namespace Qusap
         }
         public QusapLootWorld World { get; }
         public bool IsFinished { get; private set; }
+        public int ParticipantCount { get { lock (World.Gate) return inventories.Count; } }
         internal QusapRaidInventoryState FindParticipant(string id)
         { lock (World.Gate) return id != null && inventories.TryGetValue(id, out var state) ? state : null; }
         public IQusapStashRepository Stash { get; }
@@ -147,6 +148,16 @@ namespace Qusap
             return QusapLootResult.Success;
         }
         public void FinishSession() => FinishSession(true);
+        internal void AbortPreparedDeployment()
+        {
+            lock (World.Gate)
+            {
+                if (containers.Count != 0 || ExtractionTransfersResolved != 0) throw new InvalidOperationException("Cannot roll back gameplay");
+                foreach (var state in inventories.Values) state.Dispose();
+                inventories.Clear(); World.AbortPreparedDeployment(); IsFinished = true;
+                DeathSettled = null; ExtractionSettled = null;
+            }
+        }
         private void FinishSession(bool notify)
         {
             bool changed;

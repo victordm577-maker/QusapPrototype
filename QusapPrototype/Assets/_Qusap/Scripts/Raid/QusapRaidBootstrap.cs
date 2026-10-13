@@ -60,6 +60,25 @@ namespace Qusap
             foreach (var player in participants) player.GetComponent<QusapRaidExtraction>()?.BindSession();
             GetComponent<QusapRaidSessionObserver>()?.InitializeSession();
         }
+        public void BeginSharedDeploymentSession(QusapSharedRaidContext context)
+        {
+            if (!deferForDeployment || Session != null || context == null || context.Status != QusapDeploymentStatus.Running
+                || context.Deployments.Count != participants.Length || GetComponent<QusapLocalProfilePersistence>() != null)
+                throw new InvalidOperationException("Expected all shared deployments with independent profiles");
+            foreach (var player in participants)
+            {
+                var deployment = context.Deployments.Single(d => d.ParticipantId == player.ParticipantId);
+                if (player.State != null || player.ProfileId != deployment.Repository.ProfileId) throw new InvalidOperationException("Shared participant mismatch");
+            }
+            Session = context.Session; Session.DeathSettled += SpawnContainer;
+            foreach (var player in participants)
+            {
+                var deployment = context.Deployments.Single(d => d.ParticipantId == player.ParticipantId);
+                player.BindDeployment(Session, deployment.Inventory, deployment.WeaponAdapter);
+                player.GetComponent<QusapRaidExtraction>()?.BindSession();
+            }
+            GetComponent<QusapRaidSessionObserver>()?.InitializeSession();
+        }
         private void SpawnContainer(QusapDeathLootRecord record)
         {
             var owner = participants.Single(p => p.ParticipantId == record.ParticipantId);

@@ -146,7 +146,9 @@ namespace Qusap.Tests
         [Test] public void SettlementsRouteToCorrectProfilesAndFinishIsIdempotent()
         {
             var a = Seed(0, "raid_minor_heal"); var b = Seed(1, "raid_major_heal"); Select(0, null, a); Select(1, null, b); Commit(); context.StartRunning();
-            foreach (var deployment in deployments) Assert.That(context.Session.SettleExtraction(deployment.Inventory, deployment.WeaponAdapter), Is.EqualTo(QusapLootResult.Success));
+            Assert.That(context.Session.SettleExtraction(deployments[0].Inventory, deployments[0].WeaponAdapter), Is.EqualTo(QusapLootResult.Success));
+            Assert.That(deployments[1].Inventory.Status, Is.EqualTo(QusapRaidInventoryStatus.Winner));
+            Assert.That(context.Session.SettleExtraction(deployments[1].Inventory, deployments[1].WeaponAdapter), Is.EqualTo(QusapLootResult.Blocked));
             var revisions = repositories.Select(r => r.Revision).ToArray(); context.FinishSession(); context.FinishSession();
             Assert.That(repositories[0].ReadStashSnapshot(repositories[0].ProfileId).Single().LootInstanceId, Is.EqualTo(a.LootInstanceId));
             Assert.That(repositories[1].ReadStashSnapshot(repositories[1].ProfileId).Single().LootInstanceId, Is.EqualTo(b.LootInstanceId));

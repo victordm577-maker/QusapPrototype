@@ -217,8 +217,8 @@ namespace Qusap.Tests
         {
             var heal=Seed("raid_minor_heal",2);var codec=new QusapProfileCodec(catalog.Definitions);Assert.That(codec.TryDecode(File.ReadAllText(Main),out var document,out _,out _),Is.True);
             document.Content.SchemaVersion=1;string v1=QusapProfileCodec.Encode(QusapProfileCodec.Seal(document.Content));File.WriteAllText(Main,v1);File.Copy(Main,Main+".bak");
-            repo=new QusapPersistentStashRepository(directory,catalog.Definitions);Authority();Assert.That(repo.SchemaVersion,Is.EqualTo(2));Assert.That(repo.Storage.Writes,Is.Zero);Assert.That(File.ReadAllText(Main),Is.EqualTo(v1));Assert.That(repo.ReadStashSnapshot(Profile).Single().Quantity,Is.EqualTo(2));
-            Deploy(null,repo.ReadStashSnapshot(Profile).Select(i=>heal).ToArray());Assert.That(File.ReadAllText(Main+".bak"),Is.EqualTo(v1));Assert.That(codec.TryDecode(File.ReadAllText(Main),out var v2,out _,out _),Is.True);Assert.That(v2.Content.SchemaVersion,Is.EqualTo(2));Assert.That(v2.Content.ActiveDeploymentManifest.Items.Single().InstanceId,Is.EqualTo(heal.LootInstanceId));
+            repo=new QusapPersistentStashRepository(directory,catalog.Definitions);Authority();Assert.That(repo.SchemaVersion,Is.EqualTo(3));Assert.That(repo.Storage.Writes,Is.Zero);Assert.That(File.ReadAllText(Main),Is.EqualTo(v1));Assert.That(repo.ReadStashSnapshot(Profile).Single().Quantity,Is.EqualTo(2));
+            Deploy(null,repo.ReadStashSnapshot(Profile).Select(i=>heal).ToArray());Assert.That(File.ReadAllText(Main+".bak"),Is.EqualTo(v1));Assert.That(codec.TryDecode(File.ReadAllText(Main),out var v2,out _,out _),Is.True);Assert.That(v2.Content.SchemaVersion,Is.EqualTo(3));Assert.That(v2.Content.ActiveDeploymentManifest.Items.Single().InstanceId,Is.EqualTo(heal.LootInstanceId));
         }
         [Test] public void CancellationSaveFailurePreservesPreparedOwnershipAndCanRetryOnce()
         {

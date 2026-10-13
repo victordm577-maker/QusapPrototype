@@ -28,6 +28,7 @@ namespace Qusap
         internal void MarkSettled() { Status = QusapRaidInventoryStatus.Settled; }
         internal void MarkExtractionPending() { Status = QusapRaidInventoryStatus.ExtractionPending; }
         internal void MarkExtracted() { Status = QusapRaidInventoryStatus.Extracted; }
+        internal void MarkWinner() { Status = QusapRaidInventoryStatus.Winner; }
         internal void RejectExtraction() { if (Status == QusapRaidInventoryStatus.ExtractionPending) Status = QusapRaidInventoryStatus.Active; }
         private void OnChanged() => InventoryChanged?.Invoke();
         public void Dispose() { world.Changed -= OnChanged; InventoryChanged = null; }

@@ -19,6 +19,28 @@ namespace Qusap
         }
         public QusapLootWorld World { get; }
         public bool IsFinished { get; private set; }
+        public QusapRaidSessionAuthority Competition { get; private set; }
+        internal void StartLastSurvivorCompetition(IReadOnlyList<QusapRaidDeploymentAuthority> deployments)
+        {
+            lock (World.Gate)
+            {
+                if (Competition != null || IsFinished || deployments.Any(d => d.Session != this
+                    || d.Status != QusapDeploymentStatus.Running || !d.Inventory.CanOperate))
+                    throw new InvalidOperationException("All shared deployments must be Running");
+                var authority = new QusapRaidSessionAuthority(World.RaidId);
+                foreach (var state in inventories.Values) authority.Register(state.ParticipantId);
+                authority.BindResolutionValidator((id, outcome) => inventories.TryGetValue(id, out var participant)
+                    && (outcome == QusapRaidParticipantOutcome.Eliminated ? participant.Status == QusapRaidInventoryStatus.Settled
+                        : participant.Status == QusapRaidInventoryStatus.Extracted));
+                if (!authority.CompleteSharedDeployment(deployments.Select(d => d.ParticipantId).ToArray(), id =>
+                {
+                    var player = deployments.Single(d => d.ParticipantId == id);
+                    return SettleExtractionCore(player.Inventory, player.WeaponAdapter, true) == QusapLootResult.Success;
+                }) || !authority.StartSession()) throw new InvalidOperationException("Shared roster could not be sealed");
+                Competition = authority;
+                authority.SessionFinished += _ => FinishSession();
+            }
+        }
         public int ParticipantCount { get { lock (World.Gate) return inventories.Count; } }
         internal QusapRaidInventoryState FindParticipant(string id)
         { lock (World.Gate) return id != null && inventories.TryGetValue(id, out var state) ? state : null; }
@@ -31,7 +53,8 @@ namespace Qusap
         {
             lock (World.Gate)
             {
-                if (inventories.ContainsKey(participant)) throw new InvalidOperationException("Participant already registered.");
+                if (IsFinished || Competition?.RosterClosed == true || inventories.Count >= 8 || inventories.ContainsKey(participant))
+                    throw new InvalidOperationException("Participant roster unavailable.");
                 var state = new QusapRaidInventoryState(World, participant, profile, capacity);
                 inventories.Add(participant, state); return state;
             }
@@ -46,7 +69,7 @@ namespace Qusap
                     || registered != state || (weaponAdapter != null && !weaponAdapter.BelongsTo(World, state))) return QusapLootResult.InvalidSource;
                 string key = World.RaidId + "/death/" + state.ParticipantId;
                 if (containers.ContainsKey(key)) return QusapLootResult.Success;
-                if (state.CanOperate || state.Status == QusapRaidInventoryStatus.Extracted
+                if (state.CanOperate || state.Status == QusapRaidInventoryStatus.Winner || state.Status == QusapRaidInventoryStatus.Extracted
                     || state.Status == QusapRaidInventoryStatus.ExtractionPending) return QusapLootResult.Blocked;
                 if (settling.Contains(key)) return QusapLootResult.Reserved;
                 // The durable settlement key remains compatible with ActiveDeploymentManifest recovery.
@@ -99,10 +122,13 @@ namespace Qusap
                 finally { World.Release(all); settling.Remove(key); }
             }
             World.Notify(); DeathSettled?.Invoke(container);
+            Competition?.TryResolve(state.ParticipantId, QusapRaidParticipantOutcome.Eliminated);
             return QusapLootResult.Success;
         }
         // Same ledger, reservation and stash transaction as death; extraction creates no container.
         public QusapLootResult SettleExtraction(QusapRaidInventoryState state, QusapRaidWeaponAdapter weaponAdapter = null)
+            => SettleExtractionCore(state, weaponAdapter, false);
+        private QusapLootResult SettleExtractionCore(QusapRaidInventoryState state, QusapRaidWeaponAdapter weaponAdapter, bool winner)
         {
             lock (World.Gate)
             {
@@ -128,26 +154,40 @@ namespace Qusap
                     }
                     bool accepted;
                     var persistent = all.Where(i => i.CanPersist).ToArray();
-                    try { accepted = Stash.TryCommitSettlement(World.RaidId + "/extraction/" + state.ParticipantId,
-                        state.ProfileId, Array.AsReadOnly(persistent)); }
+                    try { accepted = winner
+                        ? Stash is IQusapVictoryRepository progression && progression.TryCommitVictory(World.RaidId + "/winner/" + state.ParticipantId,
+                            state.ProfileId, Array.AsReadOnly(persistent))
+                        : Stash.TryCommitSettlement(World.RaidId + "/extraction/" + state.ParticipantId,
+                            state.ProfileId, Array.AsReadOnly(persistent)); }
                     catch { accepted = false; }
                     if (!accepted)
                     {
                         if (released) weaponAdapter.Restore(equipped.Weapon);
                         return QusapLootResult.StashUnavailable;
                     }
-                    foreach (var item in all) World.Move(item, item.CanPersist ? QusapLootLocation.Stash : QusapLootLocation.Consumed,
-                        item.CanPersist ? state.ProfileId : null);
-                    state.MarkExtracted(); ExtractionTransfersResolved++; committed = true;
+                    foreach (var item in all)
+                    {
+                        if (winner && item.RaidLoaner) World.DestroyDeathLoaner(item);
+                        else World.Move(item, item.CanPersist ? QusapLootLocation.Stash : QusapLootLocation.Consumed,
+                            item.CanPersist ? state.ProfileId : null);
+                    }
+                    if (winner) state.MarkWinner(); else state.MarkExtracted();
+                    ExtractionTransfersResolved++; committed = true;
                 }
                 finally { World.Release(all); if (!committed) state.RejectExtraction(); }
             }
             World.DiscardLoaners(true);
             ExtractionSettled?.Invoke(state); // Retire the owner before publishing the changed ledger.
             World.Notify();
+            if (!winner) Competition?.TryResolve(state.ParticipantId, QusapRaidParticipantOutcome.Extracted);
             return QusapLootResult.Success;
         }
-        public void FinishSession() => FinishSession(true);
+        public void FinishSession()
+        {
+            if (Competition != null && Competition.Status != QusapRaidSessionStatus.Finished)
+            { Competition.EvaluateVictory(); return; }
+            FinishSession(true);
+        }
         internal void AbortPreparedDeployment()
         {
             lock (World.Gate)

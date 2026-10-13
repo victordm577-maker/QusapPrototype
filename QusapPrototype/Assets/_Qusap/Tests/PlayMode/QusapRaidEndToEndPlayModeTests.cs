@@ -66,7 +66,7 @@ namespace Qusap.Tests
             panel.GetComponentsInChildren<Button>().Single(b => b.name == "Slot_" + slot).onClick.Invoke();
             panel.GetComponentsInChildren<Button>().Single(b => b.name == "A seguro").onClick.Invoke();
         }
-        [UnityTest] public IEnumerator CompleteRaidPreservesPocketLootedIdentityAndSecondRaidWhileDiscardingLoansAndAbandonedLoot()
+        [UnityTest] public IEnumerator CompleteRaidPreservesPocketAndWinnerLootAndSecondRaidWhileDiscardingLoansAndAbandonedLoot()
         {
             Assert.That(P1.Session, Is.SameAs(P2.Session)); Assert.That(scene.Profiles[0], Is.Not.SameAs(scene.Profiles[1]));
             Assert.That(EditorBuildSettings.scenes.Any(s => s.path.EndsWith("RaidEndToEndPlayground.unity")), Is.False);
@@ -76,24 +76,26 @@ namespace Qusap.Tests
             yield return Take(I1, relic.LootInstanceId); yield return Take(I1, cargo.LootInstanceId); PocketThroughHud(relic.LootInstanceId); yield return Tick();
             Assert.That(P1.ReadInventorySnapshot().SecurePocket.Value.LootInstanceId, Is.EqualTo(relic.LootInstanceId));
             Place(P2, .4f); yield return Tick(); yield return Hold(1); Assert.That(I2.Observed.Items.Count, Is.GreaterThan(0));
+            var winnerCargo = I2.Observed.Items[0]; yield return Take(I2, winnerCargo.LootInstanceId);
             var abandoned = I2.Observed.Items.Select(i => i.LootInstanceId).ToArray(); I2.Close();
             var loan = scene.Raid.Session.World.Instances.Single(i => i.RaidLoaner && i.HolderId == "P1");
             P1.Receiver.TryReceiveEnvironmentDamage(1000, scene); yield return Tick(.3f);
             Assert.That(P1.Receiver.IsEliminated, Is.True); Assert.That(scene.Raid.ContainerViews.Count, Is.EqualTo(1)); Assert.That(scene.DeathPresentation.Projections.Count, Is.EqualTo(1));
             Assert.That(loan.Location, Is.EqualTo(QusapLootLocation.Destroyed)); Assert.That(loan.Weapon.IsRetired, Is.True);
             Assert.That(P1.ReadStashSnapshot().Single().LootInstanceId, Is.EqualTo(relic.LootInstanceId));
-            Place(P2, -5); yield return Tick(); yield return Hold(1); yield return Take(I2, cargo.LootInstanceId);
-            Assert.That(scene.Raid.Session.World.Get(cargo.LootInstanceId).HolderId, Is.EqualTo("P2")); I2.Close();
-            Place(P2, 5.9f); yield return Tick(.2f); Assert.That(P2.GetComponent<QusapRaidExtraction>().Status, Is.EqualTo(QusapExtractionStatus.Extracting)); yield return Tick(5.2f);
-            Assert.That(scene.Session.Status, Is.EqualTo(QusapRaidSessionStatus.Finished)); Assert.That(scene.Session.FinalResult.ExtractedCount, Is.EqualTo(1)); Assert.That(scene.Session.FinalResult.EliminatedCount, Is.EqualTo(1));
-            Assert.That(scene.Profiles[1].ReadStashSnapshot(scene.Profiles[1].ProfileId).Any(i => i.LootInstanceId == cargo.LootInstanceId), Is.True);
+            Assert.That(scene.Session.Status, Is.EqualTo(QusapRaidSessionStatus.Finished)); Assert.That(scene.Session.FinalResult.WinnerId, Is.EqualTo("P2")); Assert.That(scene.Session.FinalResult.EliminatedCount, Is.EqualTo(1));
+            Assert.That(scene.Profiles[1].ReadStashSnapshot(scene.Profiles[1].ProfileId).Any(i => i.LootInstanceId == winnerCargo.LootInstanceId), Is.True);
+            Assert.That(scene.Profiles[1].HasTriumphHorn, Is.True); Assert.That(scene.Raid.Session.World.Get(cargo.LootInstanceId).Location, Is.EqualTo(QusapLootLocation.Destroyed));
             Assert.That(scene.LostItems, Is.GreaterThanOrEqualTo(abandoned.Length)); Assert.That(scene.Duplicates, Is.Zero); Assert.That(scene.SecuredItems, Is.EqualTo(1));
             var raidId = scene.Context.RaidId; var revisions = scene.Profiles.Select(p => p.Revision).ToArray();
             scene.Raid.Session.FinishSession(); scene.Raid.Session.FinishSession(); scene.Context.FinishSession(); Assert.That(scene.Session.SessionFinishedEvents, Is.EqualTo(1));
             Assert.That(scene.Profiles.Select(p => p.Revision), Is.EqualTo(revisions));
             Assert.That(scene.BeginRaid(), Is.True); yield return Tick(.3f); Assert.That(scene.Context.RaidId, Is.Not.EqualTo(raidId));
             Assert.That(scene.Profiles[0].ReadStashSnapshot(scene.Profiles[0].ProfileId).Any(i => i.LootInstanceId == relic.LootInstanceId), Is.True);
-            Assert.That(scene.Profiles[1].ReadStashSnapshot(scene.Profiles[1].ProfileId).Any(i => i.LootInstanceId == cargo.LootInstanceId), Is.True);
+            Assert.That(scene.Profiles[1].HasTriumphHorn, Is.True);
+            var ownedWinnerCargo = scene.Profiles[1].ReadStashSnapshot(scene.Profiles[1].ProfileId).Any(i => i.LootInstanceId == winnerCargo.LootInstanceId)
+                || scene.Raid.Session.World.Instances.Any(i => i.LootInstanceId == winnerCargo.LootInstanceId && i.HolderId == "P2");
+            Assert.That(ownedWinnerCargo, Is.True);
             Assert.That(scene.Raid.Session.World.Instances.Any(i => i.LootInstanceId == loan.LootInstanceId || abandoned.Contains(i.LootInstanceId)), Is.False);
             Assert.That(scene.Duplicates, Is.Zero); Assert.That(scene.Profiles.All(p => p.HasActiveDeployment), Is.True);
             Assert.That(scene.Raid.Participants.SelectMany(p => p.GetComponentsInChildren<Animator>()).All(a => !a.applyRootMotion), Is.True);

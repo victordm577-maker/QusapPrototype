@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Qusap
 {
-    public sealed partial class QusapPersistentStashRepository : IQusapStashRepository
+    public sealed partial class QusapPersistentStashRepository : IQusapStashRepository, IQusapVictoryRepository
     {
         private readonly object gate = new();
         private readonly QusapMemoryStashRepository authority = new();
@@ -21,6 +21,10 @@ namespace Qusap
         public ulong NextNativeWeaponInstanceId => committed.NextNativeWeaponInstanceId;
         public string Checksum { get; private set; }
         public string LastResult { get; private set; }
+        public bool HasTriumphHorn => committed.TriumphHornUnlocked;
+        public bool IsNextModeUnlocked => HasTriumphHorn;
+        public int TriumphHornGrantCount => HasTriumphHorn ? 1 : 0;
+        public int TriumphHornGrantsPerformed { get; private set; }
 
         public QusapPersistentStashRepository(string directory, IReadOnlyList<QusapLootDefinition> definitions,
             string newProfileId = null, IQusapProfileFiles files = null)
@@ -32,8 +36,8 @@ namespace Qusap
             { ProfileId = newProfileId ?? Guid.NewGuid().ToString("N"), SavedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) };
             Checksum = document?.Checksum ?? QusapProfileCodec.Seal(committed).Checksum;
             if (document != null) authority.Restore(ProfileId, codec.Restore(committed), committed.Settlements);
-            // Valid v1 loads migrate deterministically in memory; disk and its only valid backup remain untouched.
-            committed.SchemaVersion = 2;
+            // One migration to current schema; prior wire layouts validate before adding the false flag.
+            committed.SchemaVersion = 3;
             LastResult = Storage.LastResult;
             if (committed.ActiveDeploymentManifest != null) TryRecoverInterruptedDeployment();
         }
@@ -43,6 +47,11 @@ namespace Qusap
         public IReadOnlyList<QusapLootSnapshot> ReadStashSnapshot(string profileId) => authority.ReadStashSnapshot(profileId);
 
         public bool TryCommitSettlement(string settlementId, string profileId, IReadOnlyList<QusapLootInstance> items)
+            => CommitSettlement(settlementId, profileId, items, false);
+        public bool TryCommitVictory(string settlementId, string profileId, IReadOnlyList<QusapLootInstance> items)
+            => profileId == ProfileId && settlementId != null && settlementId.Contains("/winner/")
+                && CommitSettlement(settlementId, profileId, items, true);
+        private bool CommitSettlement(string settlementId, string profileId, IReadOnlyList<QusapLootInstance> items, bool winner)
         {
             lock (gate)
             {
@@ -53,7 +62,7 @@ namespace Qusap
                 {
                     bool resolvesDeployment = committed.ActiveDeploymentManifest != null
                         && settlementId.StartsWith(committed.ActiveDeploymentManifest.RaidId + "/", StringComparison.Ordinal);
-                    if (items.Count == 0 && !resolvesDeployment) return true;
+                    if (items.Count == 0 && !resolvesDeployment && !winner) return true;
                     prepared = true;
                     var stash = authority.ReadStashSnapshot(profileId).Select(QusapProfileItem.From)
                         .Concat(items.Select(item => QusapProfileItem.From(new QusapLootSnapshot(item)))).ToArray();
@@ -68,8 +77,8 @@ namespace Qusap
                     nextItem = Math.Max(nextItem, checked(maxItem + 1));
                     ulong maxNative = stash.Select(item => item.NativeWeaponInstanceId).DefaultIfEmpty(0UL).Max();
                     var receipts = authority.ReadReceipts(profileId)
-                        .Where(r => r.Fingerprint.Split('\n').Length > 1 && r.Fingerprint.Split('\n')[1].Length > 0)
-                        .Concat(items.Count == 0 ? Array.Empty<QusapProfileReceipt>() : new[] { new QusapProfileReceipt
+                        .Where(r => r.SettlementId.Contains("/winner/") || (r.Fingerprint.Split('\n').Length > 1 && r.Fingerprint.Split('\n')[1].Length > 0))
+                        .Concat(items.Count == 0 && !winner ? Array.Empty<QusapProfileReceipt>() : new[] { new QusapProfileReceipt
                         {
                             SettlementId = settlementId,
                             Fingerprint = profileId + "\n" + string.Join("\n", items.Select(i => i.LootInstanceId).OrderBy(id => id, StringComparer.Ordinal))
@@ -84,10 +93,13 @@ namespace Qusap
                         Stash = stash, Settlements = receipts
                         , ActiveDeploymentManifest = resolvesDeployment ? null : committed.ActiveDeploymentManifest,
                         RecoveryReason = committed.RecoveryReason
+                        , TriumphHornUnlocked = committed.TriumphHornUnlocked || winner
                     };
                     var document = QusapProfileCodec.Seal(candidate);
                     if (!Storage.TryWrite(document)) { LastResult = Storage.LastResult; return false; }
+                    bool granted = winner && !committed.TriumphHornUnlocked;
                     committed = candidate; Checksum = document.Checksum; LastResult = Storage.LastResult;
+                    if (granted) TriumphHornGrantsPerformed++;
                     return true;
                 });
                 if (!prepared) LastResult = accepted ? "No change; no additional revision or disk write" : "Settlement rejected; no disk write";

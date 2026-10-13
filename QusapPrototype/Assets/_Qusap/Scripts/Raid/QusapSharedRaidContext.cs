@@ -6,7 +6,7 @@ namespace Qusap
 {
     // Coordinates existing deployments/settlements. Owns one session, never an inventory.
     // The local shared route is atomic over separate reversible in-memory profile stores.
-    public sealed class QusapSharedRaidContext : IQusapStashRepository, IDisposable
+    public sealed class QusapSharedRaidContext : IQusapStashRepository, IQusapVictoryRepository, IDisposable
     {
         private readonly string[] required;
         private readonly Dictionary<string, QusapRaidDeploymentAuthority> players = new(StringComparer.Ordinal);
@@ -65,7 +65,10 @@ namespace Qusap
                 foreach (var deployment in Deployments)
                     if (!deployment.StartSharedRunning(this)) { string reason = deployment.LastResult; Rollback(); return Reject(reason); }
                 foreach (var deployment in Deployments) deployment.Inventory.DeploymentLocked = false;
-                rollback.Clear(); Status = QusapDeploymentStatus.Running; LastResult = "All required participants running"; return true;
+                if (required.Length >= 2) Session.StartLastSurvivorCompetition(Deployments);
+                rollback.Clear(); Status = QusapDeploymentStatus.Running;
+                if (Session.Competition != null) Session.Competition.SessionFinished += _ => FinishSession();
+                LastResult = "All required participants running; roster closed"; return true;
             }
             catch (Exception exception) { Rollback(); return Reject(exception.Message); }
             finally { busy = false; }
@@ -87,11 +90,15 @@ namespace Qusap
         }
         public void FinishSession()
         {
-            if (busy || disposed || Status != QusapDeploymentStatus.Running || Deployments.Any(d => d.Status != QusapDeploymentStatus.Resolved)) return;
-            if (!Session.IsFinished) Session.FinishSession(); Status = QusapDeploymentStatus.Resolved;
+            if (busy || disposed || Status != QusapDeploymentStatus.Running) return;
+            if (!Session.IsFinished) Session.FinishSession();
+            if (!Session.IsFinished || Deployments.Any(d => d.Status != QusapDeploymentStatus.Resolved)) return;
+            Status = QusapDeploymentStatus.Resolved;
         }
         public bool TryCommitSettlement(string settlementId, string profileId, IReadOnlyList<QusapLootInstance> items)
             => profiles.TryGetValue(profileId, out var profile) && profile.TryCommitSettlement(settlementId, profileId, items);
+        public bool TryCommitVictory(string settlementId, string profileId, IReadOnlyList<QusapLootInstance> items)
+            => profiles.TryGetValue(profileId, out var profile) && profile.TryCommitVictory(settlementId, profileId, items);
         public IReadOnlyList<QusapLootSnapshot> ReadStashSnapshot(string profileId)
             => profiles.TryGetValue(profileId, out var profile) ? profile.ReadStashSnapshot(profileId) : Array.Empty<QusapLootSnapshot>();
         public void Dispose()

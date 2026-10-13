@@ -60,7 +60,7 @@ namespace Qusap
                     var parts = settlements[key].Split('\n');
                     if (parts[0] != profile) continue;
                     var remaining = parts.Skip(1).Where(id => !ids.Contains(id)).ToArray();
-                    if (remaining.Length == 0) settlements.Remove(key);
+                    if (remaining.Length == 0 && !key.Contains("/winner/")) settlements.Remove(key);
                     else settlements[key] = profile + "\n" + string.Join("\n", remaining);
                 }
                 return true;

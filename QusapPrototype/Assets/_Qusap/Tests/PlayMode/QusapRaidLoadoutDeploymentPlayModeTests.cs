@@ -41,7 +41,7 @@ namespace Qusap.Tests
         private void Place(QusapRaidInventory player){var body=player.GetComponent<Rigidbody>();body.position=new Vector3(-2,1.01f,0);body.linearVelocity=Vector3.zero;Physics.SyncTransforms();UnityEngine.Object.FindAnyObjectByType<QusapExtractionVolume>().Configure(.25f);}
         [UnityTest]public IEnumerator IsolatedSceneWaitsForDeploymentAndKeepsBuildCatalogAndRootMotion()
         {
-            Assert.That(scene.Profile.Storage.DirectoryPath,Is.EqualTo(directory));Assert.That(scene.Profile.SchemaVersion,Is.EqualTo(2));Assert.That(scene.Profile.ReadStashSnapshot(scene.Profile.ProfileId).Count,Is.EqualTo(3));
+            Assert.That(scene.Profile.Storage.DirectoryPath,Is.EqualTo(directory));Assert.That(scene.Profile.SchemaVersion,Is.EqualTo(3));Assert.That(scene.Profile.ReadStashSnapshot(scene.Profile.ProfileId).Count,Is.EqualTo(3));
             Assert.That(p1.State,Is.Null);Assert.That(p1.GetComponent<QusapWeaponEquipment>().HasWeapon,Is.False);Assert.That(scene.Catalog.Definitions.Count,Is.EqualTo(9));Assert.That(scene.Catalog.Aliases.Count,Is.EqualTo(5));
             Assert.That(EditorBuildSettings.scenes.All(s=>s.path!=ScenePath),Is.True);Assert.That(scene.Raid.Participants.SelectMany(p=>p.GetComponentsInChildren<Animator>(true)).All(a=>!a.applyRootMotion),Is.True);yield return null;
         }

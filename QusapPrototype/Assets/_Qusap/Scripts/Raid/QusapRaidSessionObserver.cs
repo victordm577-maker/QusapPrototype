@@ -25,12 +25,12 @@ namespace Qusap
         {
             if (Authority != null) return;
             ledger = raid.Session;
-            Authority = new QusapRaidSessionAuthority(ledger.World.RaidId, participantLimit);
-            Authority.SessionFinished += _ => ledger.FinishSession();
+            Authority = ledger.Competition ?? new QusapRaidSessionAuthority(ledger.World.RaidId, participantLimit);
+            if (ledger.Competition == null) Authority.SessionFinished += _ => ledger.FinishSession();
             foreach (var player in raid.Participants)
             {
                 if (player == null || player.State == null || player.Session != ledger || player.Receiver == null
-                    || receivers.ContainsKey(player.Receiver) || !Authority.Register(player.ParticipantId))
+                    || receivers.ContainsKey(player.Receiver) || (ledger.Competition == null && !Authority.Register(player.ParticipantId)))
                     throw new System.InvalidOperationException("Invalid raid participant configuration.");
                 participants.Add(player.ParticipantId, player); receivers.Add(player.Receiver, player);
             }
@@ -40,6 +40,7 @@ namespace Qusap
         public bool StartSession()
         {
             if (Authority == null) return false;
+            if (ledger.Competition != null) return Authority.Status == QusapRaidSessionStatus.Running;
             if (Authority.Status == QusapRaidSessionStatus.Waiting)
                 foreach (var player in participants.Values)
                     if (!player.State.CanOperate || player.Receiver.IsHealthDepleted)
@@ -52,6 +53,8 @@ namespace Qusap
         public bool ObserveExtraction(QusapRaidInventoryState state)
         {
             if (Authority == null) return false;
+            if (ledger.Competition != null) return state != null && participants.TryGetValue(state.ParticipantId, out var sharedPlayer)
+                && ReferenceEquals(sharedPlayer.State, state) && (state.Status == QusapRaidInventoryStatus.Extracted || state.Status == QusapRaidInventoryStatus.Winner);
             if (state == null || !participants.TryGetValue(state.ParticipantId, out var player)
                 || !ReferenceEquals(player.State, state) || state.Status != QusapRaidInventoryStatus.Extracted)
                 return Authority.RejectSignal(QusapRaidSessionRejection.AuthoritativeSourceMismatch);
@@ -60,6 +63,8 @@ namespace Qusap
         public bool ObserveElimination(QusapHitReceiver receiver)
         {
             if (Authority == null) return false;
+            if (ledger.Competition != null) return receiver != null && receivers.TryGetValue(receiver, out var sharedPlayer)
+                && receiver.IsEliminated && sharedPlayer.State.Status == QusapRaidInventoryStatus.Settled;
             if (receiver == null || !receivers.TryGetValue(receiver, out var player) || !receiver.IsEliminated)
                 return Authority.RejectSignal(QusapRaidSessionRejection.AuthoritativeSourceMismatch);
             return Authority.TryResolve(player.ParticipantId, QusapRaidParticipantOutcome.Eliminated);

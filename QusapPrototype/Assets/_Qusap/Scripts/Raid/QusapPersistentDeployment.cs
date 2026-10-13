@@ -30,7 +30,7 @@ namespace Qusap
         {
             var candidate = JsonUtility.FromJson<QusapProfileContent>(JsonUtility.ToJson(committed));
             if (committed.ActiveDeploymentManifest == null) candidate.ActiveDeploymentManifest = null;
-            candidate.SchemaVersion = 2; candidate.Revision = checked(Revision + 1);
+            candidate.SchemaVersion = 3; candidate.Revision = checked(Revision + 1);
             candidate.SavedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             return candidate;
         }
@@ -55,7 +55,7 @@ namespace Qusap
                     candidate.Stash = candidate.Stash.Where(i => !ids.Contains(i.InstanceId)).ToArray();
                     candidate.Settlements = candidate.Settlements.Select(r => new QusapProfileReceipt { SettlementId = r.SettlementId,
                         Fingerprint = ProfileId + "\n" + string.Join("\n", r.Fingerprint.Split('\n').Skip(1).Where(id => !ids.Contains(id))) })
-                        .Where(r => r.Fingerprint != ProfileId + "\n").ToArray();
+                        .Where(r => r.SettlementId.Contains("/winner/") || r.Fingerprint != ProfileId + "\n").ToArray();
                     return Publish(candidate);
                 }, out items);
                 if (!success) volatileDeploymentId = null;

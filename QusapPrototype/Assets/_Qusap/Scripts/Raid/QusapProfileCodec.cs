@@ -33,7 +33,7 @@ namespace Qusap
 
     [Serializable] public sealed class QusapProfileContent
     {
-        public int SchemaVersion = 2;
+        public int SchemaVersion = 3;
         public string ProfileId;
         public long Revision;
         public string SavedAtUtc;
@@ -43,6 +43,7 @@ namespace Qusap
         public QusapProfileReceipt[] Settlements = Array.Empty<QusapProfileReceipt>();
         public QusapActiveDeploymentManifest ActiveDeploymentManifest;
         public string RecoveryReason = string.Empty;
+        public bool TriumphHornUnlocked;
     }
 
     [Serializable] public sealed class QusapProfileDocument
@@ -77,13 +78,16 @@ namespace Qusap
             return new QusapProfileDocument { Content = content, Checksum = Sha256(WireContent(content)) };
         }
         private static string WireContent(QusapProfileContent c) => c.SchemaVersion == 1
-            ? JsonUtility.ToJson(QusapV1ProfileContent.From(c)) : NullableManifest(JsonUtility.ToJson(c), c);
+            ? JsonUtility.ToJson(QusapV1ProfileContent.From(c)) : c.SchemaVersion == 2
+            ? NullableManifest(JsonUtility.ToJson(QusapV2ProfileContent.From(c)), c) : NullableManifest(JsonUtility.ToJson(c), c);
         // Unity serializes a null inline class as an empty object. Preserve an actual nullable journal on disk.
         private static string NullableManifest(string json, QusapProfileContent c) => c.ActiveDeploymentManifest != null ? json
             : json.Replace("\"ActiveDeploymentManifest\":" + JsonUtility.ToJson(new QusapActiveDeploymentManifest()), "\"ActiveDeploymentManifest\":null");
         public static string Encode(QusapProfileDocument document) => document.LegacyWithoutQuantity
             ? JsonUtility.ToJson(QusapLegacyProfileDocument.From(document)) : document.Content.SchemaVersion == 1
             ? JsonUtility.ToJson(new QusapV1ProfileDocument { Content = QusapV1ProfileContent.From(document.Content), Checksum = document.Checksum })
+            : document.Content.SchemaVersion == 2
+            ? NullableManifest(JsonUtility.ToJson(new QusapV2ProfileDocument { Content = QusapV2ProfileContent.From(document.Content), Checksum = document.Checksum }), document.Content)
             : NullableManifest(JsonUtility.ToJson(document), document.Content);
 
         public bool TryDecode(string json, out QusapProfileDocument document, out string error, out bool future)
@@ -94,8 +98,8 @@ namespace Qusap
                 document = JsonUtility.FromJson<QusapProfileDocument>(json);
                 if (document?.Content == null) return false;
                 if (document.Content.SchemaVersion == 1 || json.Contains("\"ActiveDeploymentManifest\":null")) document.Content.ActiveDeploymentManifest = null;
-                future = document.Content.SchemaVersion > 2;
-                if (document.Content.SchemaVersion != 1 && document.Content.SchemaVersion != 2) { error = "Incompatible SchemaVersion: " + document.Content.SchemaVersion; return false; }
+                future = document.Content.SchemaVersion > 3;
+                if (document.Content.SchemaVersion < 1 || document.Content.SchemaVersion > 3) { error = "Incompatible SchemaVersion: " + document.Content.SchemaVersion; return false; }
                 // Reject omitted/unknown/duplicate fields and noncanonical payloads rather than hashing only a subset.
                 if (!string.Equals(json, Encode(document), StringComparison.Ordinal))
                 {
@@ -115,7 +119,7 @@ namespace Qusap
         {
             error = "Invalid profile metadata";
             var c = document?.Content;
-            if (c == null || (c.SchemaVersion != 1 && c.SchemaVersion != 2) || string.IsNullOrWhiteSpace(c.ProfileId)
+            if (c == null || c.SchemaVersion < 1 || c.SchemaVersion > 3 || (c.SchemaVersion < 3 && c.TriumphHornUnlocked) || string.IsNullOrWhiteSpace(c.ProfileId)
                 || c.ProfileId.Contains('\n') || c.Revision < 1 || c.Stash == null || c.Settlements == null
                 || !DateTime.TryParseExact(c.SavedAtUtc, "O", CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out var date) || date.Kind != DateTimeKind.Utc
@@ -173,6 +177,8 @@ namespace Qusap
                 var parts = receipt.Fingerprint.Split('\n');
                 if (parts.Length < 2 || parts[0] != c.ProfileId) return false;
                 var receiptItems = parts.Skip(1).ToArray();
+                if (receiptItems.Length == 1 && receiptItems[0] == string.Empty && c.SchemaVersion >= 3
+                    && receipt.SettlementId.Contains("/winner/")) continue;
                 if (!receiptItems.SequenceEqual(receiptItems.OrderBy(id => id, StringComparer.Ordinal))) return false;
                 foreach (string id in receiptItems) if (!stashIds.Contains(id) || !receiptedItems.Add(id)) return false;
             }

@@ -24,7 +24,34 @@ namespace Qusap
         public bool IsFinished { get; private set; }
         public QusapRaidSessionAuthority Competition { get; private set; }
         public QusapRaidTiming Timing { get; }
-        public bool CanExtract => !IsFinished && (Timing == null || Timing.ExtractionsOpen);
+        public bool CanExtract => !IsFinished && Competition?.EnvironmentalDamageInProgress != true
+            && (Timing == null || Timing.ExtractionsOpen);
+        // Health depletion is synchronous but the existing receiver eliminates in LateUpdate.
+        // Fence victory across that gap and across any rejected per-profile death settlement.
+        public bool ApplyEnvironmentalDamageBatch(IReadOnlyList<QusapRaidInventory> targets, float damage, UnityEngine.Object source)
+        {
+            lock (World.Gate)
+            {
+                if (IsFinished || Timing == null || Competition == null || !Timing.IsRunning || Timing.HasExpired || targets == null
+                    || advancing || settling.Count != 0 || World.Instances.Any(i => i.Reserved)
+                    || !float.IsFinite(damage) || damage <= 0 || targets.Distinct().Count() != targets.Count
+                    || targets.Any(p => p == null || p.Session != this || p.State == null || p.Receiver == null
+                        || !p.CanOperate || !Competition.TryGetOutcome(p.ParticipantId, out var outcome)
+                        || outcome != QusapRaidParticipantOutcome.Active)
+                    || !Competition.BeginEnvironmentalDamage()) return false;
+                try
+                {
+                    foreach (var actor in targets) actor.Receiver.TryReceiveEnvironmentDamage(damage, source);
+                    return true;
+                }
+                finally
+                {
+                    foreach (var actor in targets)
+                        if (actor != null && actor.Receiver.IsHealthDepleted) Competition.RecordEnvironmentalDeath(actor.ParticipantId);
+                    Competition.EndEnvironmentalDamage();
+                }
+            }
+        }
         public event Action<IReadOnlyList<QusapRaidInventoryState>> ExpirationStarted;
         public bool AdvanceTime(double seconds)
         {

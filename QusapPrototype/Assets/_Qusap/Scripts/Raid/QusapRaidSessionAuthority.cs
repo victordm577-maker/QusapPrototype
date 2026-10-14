@@ -50,7 +50,11 @@ namespace Qusap
         private Func<string, bool> commitWinner;
         private Func<string, QusapRaidParticipantOutcome, bool> validateResolution;
         private bool evaluating;
-        internal bool ResolutionInProgress => evaluating;
+        private int environmentalDamageDepth;
+        private readonly HashSet<string> environmentalDeaths = new(StringComparer.Ordinal);
+        internal bool ResolutionInProgress => evaluating || environmentalDamageDepth != 0;
+        public int EnvironmentalDeathsPending => environmentalDeaths.Count;
+        public bool EnvironmentalDamageInProgress => environmentalDamageDepth != 0;
         public bool RosterClosed { get; private set; }
         public bool SharedDeploymentCompleted { get; private set; }
         public bool ExpirationStarted { get; private set; }
@@ -116,6 +120,23 @@ namespace Qusap
             if (evaluating || Status != QusapRaidSessionStatus.Running || !SharedDeploymentCompleted || !RosterClosed) return false;
             ExpirationStarted = true; return true;
         }
+        internal bool BeginEnvironmentalDamage()
+        {
+            if (ResolutionInProgress || ExpirationStarted || Status != QusapRaidSessionStatus.Running
+                || !SharedDeploymentCompleted || !RosterClosed) return false;
+            environmentalDamageDepth++;
+            return true;
+        }
+        internal void RecordEnvironmentalDeath(string id)
+        {
+            if (outcomes.TryGetValue(id, out var outcome) && outcome == QusapRaidParticipantOutcome.Active)
+                environmentalDeaths.Add(id);
+        }
+        internal void EndEnvironmentalDamage()
+        {
+            environmentalDamageDepth--;
+            EvaluateVictory();
+        }
         public bool TryResolve(string participantId, QusapRaidParticipantOutcome outcome)
         {
             if (evaluating) return RejectSignal(QusapRaidSessionRejection.AlreadyResolved);
@@ -130,12 +151,14 @@ namespace Qusap
             if (validateResolution != null && !validateResolution(participantId, outcome))
                 return RejectSignal(QusapRaidSessionRejection.AuthoritativeSourceMismatch);
             outcomes[participantId] = outcome; LastRejection = QusapRaidSessionRejection.None;
+            if (outcome == QusapRaidParticipantOutcome.Eliminated) environmentalDeaths.Remove(participantId);
             EvaluateVictory();
             return true;
         }
         public bool EvaluateVictory()
         {
-            if (evaluating || Status != QusapRaidSessionStatus.Running) return false;
+            if (evaluating || environmentalDamageDepth != 0 || environmentalDeaths.Count != 0
+                || Status != QusapRaidSessionStatus.Running) return false;
             if (LastSurvivorEnabled && (!SharedDeploymentCompleted || !RosterClosed || ParticipantCount < 2)) return false;
             evaluating = true;
             try

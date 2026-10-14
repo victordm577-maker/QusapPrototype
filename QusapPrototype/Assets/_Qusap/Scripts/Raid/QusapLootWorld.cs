@@ -8,6 +8,7 @@ namespace Qusap
     public sealed partial class QusapLootWorld
     {
         internal readonly object Gate = new();
+        internal bool GameplayBlocked { get; set; }
         private readonly Dictionary<string, QusapLootInstance> items = new(StringComparer.Ordinal);
         private ulong sequence;
         private readonly List<QusapRaidWeaponAdapter> weaponAdapters = new();

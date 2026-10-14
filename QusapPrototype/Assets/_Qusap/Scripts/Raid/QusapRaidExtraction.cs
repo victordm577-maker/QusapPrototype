@@ -11,6 +11,7 @@ namespace Qusap
         private QusapRespawnController recovery;
         private QusapExtractionVolume zone;
         private bool resolving;
+        private double observedSessionSeconds;
         private QusapRaidSession session;
         public QusapExtractionCountdown Countdown { get; } = new();
         public QusapExtractionStatus Status => Countdown.Status;
@@ -56,10 +57,11 @@ namespace Qusap
         public bool TryBegin(QusapExtractionVolume volume)
         {
             if (!isActiveAndEnabled || resolving || inventory == null || !inventory.CanOperate
+                || inventory.Session == null || !inventory.Session.CanExtract
                 || volume == null || !volume.Available || !volume.Contains(this)
                 || !Countdown.Begin(volume.RequiredSeconds, true))
             { LastRejection = "Blocked: " + Status; return false; }
-            zone = volume; LastRejection = "None"; return true;
+            zone = volume; observedSessionSeconds = inventory.Session.Timing?.ElapsedSeconds ?? 0; LastRejection = "None"; return true;
         }
         public void Leave(QusapExtractionVolume volume, QusapExtractionCancellation reason)
         {
@@ -69,14 +71,22 @@ namespace Qusap
         private void Update()
         {
             if (Status != QusapExtractionStatus.Extracting) return;
+            if (!inventory.Session.CanExtract) { Countdown.Cancel(QusapExtractionCancellation.WindowClosed); zone = null; return; }
             if (!inventory.CanOperate) { Countdown.Eliminate(); zone = null; return; }
             if (zone == null || !zone.Available) { Countdown.Cancel(QusapExtractionCancellation.ZoneDisabled); zone = null; return; }
             if (!zone.Contains(this)) { Leave(zone, QusapExtractionCancellation.LeftVolume); return; }
-            Countdown.Advance(Time.deltaTime, Resolve);
+            float delta = Time.deltaTime;
+            if (inventory.Session.Timing != null)
+            {
+                double elapsed = inventory.Session.Timing.ElapsedSeconds;
+                delta = (float)System.Math.Max(0, elapsed - observedSessionSeconds);
+                observedSessionSeconds = elapsed;
+            }
+            Countdown.Advance(delta, Resolve);
         }
         private QusapLootResult Resolve()
         {
-            if (resolving || !inventory.CanOperate || zone == null || !zone.Available || !zone.Contains(this))
+            if (resolving || !inventory.CanOperate || !inventory.Session.CanExtract || zone == null || !zone.Available || !zone.Contains(this))
                 return QusapLootResult.Blocked;
             resolving = true;
             try

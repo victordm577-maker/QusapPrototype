@@ -3,7 +3,7 @@ using System;
 namespace Qusap
 {
     public enum QusapExtractionStatus { Active, Extracting, Extracted, Eliminated }
-    public enum QusapExtractionCancellation { None, LeftVolume, Damage, Eliminated, TechnicalRecovery, ZoneDisabled, PlayerDisabled, SettlementRejected }
+    public enum QusapExtractionCancellation { None, LeftVolume, Damage, Eliminated, TechnicalRecovery, ZoneDisabled, PlayerDisabled, SettlementRejected, WindowClosed }
 
     // Gameplay seconds supplied by the C# owner; independent of animation and presentation.
     public sealed class QusapExtractionCountdown

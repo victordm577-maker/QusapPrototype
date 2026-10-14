@@ -20,10 +20,11 @@ namespace Qusap
         public int Capacity { get; }
         public QusapRaidInventoryStatus Status { get; private set; }
         internal bool DeploymentLocked { get; set; }
-        public bool CanOperate => Status == QusapRaidInventoryStatus.Active && !DeploymentLocked;
+        public bool CanOperate => Status == QusapRaidInventoryStatus.Active && !DeploymentLocked && !world.GameplayBlocked;
         public event Action InventoryChanged;
         internal void BindEquipment(Func<QusapWeaponInstance> read) => readEquipped = read;
         public void BlockOperations() { if (CanOperate) { Status = QusapRaidInventoryStatus.Blocked; OnChanged(); } }
+        internal void BlockForExpiration() { if (Status == QusapRaidInventoryStatus.Active) Status = QusapRaidInventoryStatus.Blocked; }
         internal void MarkPending() { Status = QusapRaidInventoryStatus.SettlementPending; }
         internal void MarkSettled() { Status = QusapRaidInventoryStatus.Settled; }
         internal void MarkExtractionPending() { Status = QusapRaidInventoryStatus.ExtractionPending; }

@@ -12,13 +12,16 @@ namespace Qusap
         private readonly Dictionary<string, QusapRaidDeploymentAuthority> players = new(StringComparer.Ordinal);
         private readonly Dictionary<string, QusapPersistentStashRepository> profiles = new(StringComparer.Ordinal);
         private readonly List<Action> rollback = new();
+        private readonly QusapRaidTimingSettings timing;
         private bool busy, disposed;
-        public QusapSharedRaidContext(params string[] requiredParticipants)
+        public QusapSharedRaidContext(params string[] requiredParticipants) : this(null, requiredParticipants) { }
+        public QusapSharedRaidContext(QusapRaidTimingSettings timing, params string[] requiredParticipants)
         {
             if (requiredParticipants == null || requiredParticipants.Length < 1 || requiredParticipants.Length > 8
                 || requiredParticipants.Any(string.IsNullOrWhiteSpace) || requiredParticipants.Distinct(StringComparer.Ordinal).Count() != requiredParticipants.Length)
                 throw new ArgumentException("Distinct required participants expected");
-            required = (string[])requiredParticipants.Clone(); RaidId = Guid.NewGuid().ToString("N");
+            if (timing != null && requiredParticipants.Length < 2) throw new ArgumentException("Timed competition requires at least two participants");
+            this.timing = timing; required = (string[])requiredParticipants.Clone(); RaidId = Guid.NewGuid().ToString("N");
         }
         public string RaidId { get; }
         public QusapRaidSession Session { get; private set; }
@@ -44,7 +47,7 @@ namespace Qusap
             try
             {
                 foreach (var profile in profiles.Values) rollback.Add(profile.CaptureSharedRollback());
-                var session = new QusapRaidSession(RaidId, this);
+                var session = new QusapRaidSession(RaidId, this, timing);
                 // Reserve past every profile counter before creating any loaner or importing items.
                 session.World.ReserveInstanceIdsThrough(profiles.Values.Max(p => p.NextItemInstanceId) - 1);
                 foreach (var profile in profiles.Values) profile.ObserveAllocator(session.World);

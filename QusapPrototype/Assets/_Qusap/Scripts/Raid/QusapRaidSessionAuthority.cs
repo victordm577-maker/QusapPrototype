@@ -6,7 +6,7 @@ namespace Qusap
 {
     public enum QusapRaidSessionStatus { Waiting, Running, Finished }
     public enum QusapRaidParticipantOutcome { Active, Extracted, Eliminated, Winner }
-    public enum QusapRaidSessionFinishReason { AllParticipantsResolved, LastSurvivor }
+    public enum QusapRaidSessionFinishReason { AllParticipantsResolved, LastSurvivor, Expired }
     public enum QusapRaidSessionRejection
     {
         None, NotWaiting, NoParticipants, InvalidId, DuplicateParticipant, CapacityReached,
@@ -23,13 +23,15 @@ namespace Qusap
 
     public sealed class QusapRaidSessionResult
     {
-        internal QusapRaidSessionResult(string sessionId, IEnumerable<QusapRaidParticipantResult> participants)
+        internal QusapRaidSessionResult(string sessionId, IEnumerable<QusapRaidParticipantResult> participants, bool expired = false)
         {
             SessionId = sessionId;
             Participants = Array.AsReadOnly(participants.OrderBy(p => p.ParticipantId, StringComparer.Ordinal).ToArray());
             ExtractedCount = Participants.Count(p => p.Outcome == QusapRaidParticipantOutcome.Extracted);
             EliminatedCount = Participants.Count(p => p.Outcome == QusapRaidParticipantOutcome.Eliminated);
             WinnerId = Participants.SingleOrDefault(p => p.Outcome == QusapRaidParticipantOutcome.Winner)?.ParticipantId;
+            Reason = expired ? QusapRaidSessionFinishReason.Expired : WinnerId == null
+                ? QusapRaidSessionFinishReason.AllParticipantsResolved : QusapRaidSessionFinishReason.LastSurvivor;
         }
         public string SessionId { get; }
         public int ParticipantCount => Participants.Count;
@@ -37,7 +39,7 @@ namespace Qusap
         public int ExtractedCount { get; }
         public int EliminatedCount { get; }
         public string WinnerId { get; }
-        public QusapRaidSessionFinishReason Reason => WinnerId == null ? QusapRaidSessionFinishReason.AllParticipantsResolved : QusapRaidSessionFinishReason.LastSurvivor;
+        public QusapRaidSessionFinishReason Reason { get; }
     }
 
     // Session authority decides victory. The injected transaction must commit before Winner is published.
@@ -48,8 +50,10 @@ namespace Qusap
         private Func<string, bool> commitWinner;
         private Func<string, QusapRaidParticipantOutcome, bool> validateResolution;
         private bool evaluating;
+        internal bool ResolutionInProgress => evaluating;
         public bool RosterClosed { get; private set; }
         public bool SharedDeploymentCompleted { get; private set; }
+        public bool ExpirationStarted { get; private set; }
         public bool LastSurvivorEnabled => commitWinner != null;
         public string WinnerId => FinalResult?.WinnerId;
         internal void BindResolutionValidator(Func<string, QusapRaidParticipantOutcome, bool> validator)
@@ -107,6 +111,11 @@ namespace Qusap
         }
 
         // Called by the event observer after validating the registered authoritative source.
+        internal bool BeginExpiration()
+        {
+            if (evaluating || Status != QusapRaidSessionStatus.Running || !SharedDeploymentCompleted || !RosterClosed) return false;
+            ExpirationStarted = true; return true;
+        }
         public bool TryResolve(string participantId, QusapRaidParticipantOutcome outcome)
         {
             if (evaluating) return RejectSignal(QusapRaidSessionRejection.AlreadyResolved);
@@ -115,6 +124,8 @@ namespace Qusap
                 return RejectSignal(QusapRaidSessionRejection.UnknownParticipant);
             if (outcome != QusapRaidParticipantOutcome.Extracted && outcome != QusapRaidParticipantOutcome.Eliminated)
                 return RejectSignal(QusapRaidSessionRejection.InvalidOutcome);
+            if (ExpirationStarted && outcome != QusapRaidParticipantOutcome.Eliminated)
+                return RejectSignal(QusapRaidSessionRejection.NotRunning);
             if (current != QusapRaidParticipantOutcome.Active) return RejectSignal(QusapRaidSessionRejection.AlreadyResolved);
             if (validateResolution != null && !validateResolution(participantId, outcome))
                 return RejectSignal(QusapRaidSessionRejection.AuthoritativeSourceMismatch);
@@ -129,14 +140,14 @@ namespace Qusap
             evaluating = true;
             try
             {
-                if (LastSurvivorEnabled && ActiveCount == 1)
+                if (!ExpirationStarted && LastSurvivorEnabled && ActiveCount == 1)
                 {
                     string last = outcomes.Single(p => p.Value == QusapRaidParticipantOutcome.Active).Key;
                     if (!commitWinner(last)) return false; // Keep Running and Active for a safe retry.
                     outcomes[last] = QusapRaidParticipantOutcome.Winner;
                 }
                 if (ActiveCount != 0) return false;
-                FinalResult = new QusapRaidSessionResult(SessionId, ReadParticipantsSnapshot());
+                FinalResult = new QusapRaidSessionResult(SessionId, ReadParticipantsSnapshot(), ExpirationStarted);
                 Status = QusapRaidSessionStatus.Finished; SessionFinishedEvents++;
                 SessionFinished?.Invoke(FinalResult); return true;
             }

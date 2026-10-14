@@ -10,16 +10,58 @@ namespace Qusap
         private readonly Dictionary<string, QusapDeathLootRecord> containers = new(StringComparer.Ordinal);
         private readonly HashSet<string> settling = new(StringComparer.Ordinal);
         private ulong eliminationOrdinal;
-        public QusapRaidSession(string raidId, IQusapStashRepository stash = null)
+        private QusapRaidDeploymentAuthority[] deployments;
+        private bool advancing;
+        public QusapRaidSession(string raidId, IQusapStashRepository stash = null, QusapRaidTimingSettings timing = null)
         {
             var persistent = stash as QusapPersistentStashRepository;
             World = new QusapLootWorld(raidId, persistent?.NextItemInstanceId ?? 1);
             Stash = stash ?? new QusapMemoryStashRepository();
+            if (timing != null) Timing = new QusapRaidTiming(timing);
             persistent?.ObserveAllocator(World);
         }
         public QusapLootWorld World { get; }
         public bool IsFinished { get; private set; }
         public QusapRaidSessionAuthority Competition { get; private set; }
+        public QusapRaidTiming Timing { get; }
+        public bool CanExtract => !IsFinished && (Timing == null || Timing.ExtractionsOpen);
+        public event Action<IReadOnlyList<QusapRaidInventoryState>> ExpirationStarted;
+        public bool AdvanceTime(double seconds)
+        {
+            lock (World.Gate)
+            {
+                if (advancing || Competition?.ResolutionInProgress == true || Timing == null || !Timing.IsRunning || IsFinished
+                    || !double.IsFinite(seconds) || seconds < 0 || World.Instances.Any(i => i.Reserved)) return false;
+                advancing = true;
+                try
+                {
+                    Timing.Advance(seconds);
+                    if (Timing.HasExpired) ResolveExpiration();
+                    return true;
+                }
+                finally { advancing = false; }
+            }
+        }
+        // Per-profile atomic settlements; accepted profiles stay accepted on a later rejection.
+        // The whole roster is fenced before any callback, and Winner stays suppressed on retries.
+        private void ResolveExpiration()
+        {
+            if (!Competition.BeginExpiration()) return;
+            var active = Competition.ReadParticipantsSnapshot().Where(p => p.Outcome == QusapRaidParticipantOutcome.Active)
+                .Select(p => inventories[p.ParticipantId]).ToArray();
+            bool first = !World.GameplayBlocked;
+            World.GameplayBlocked = true;
+            foreach (var state in active) state.BlockForExpiration();
+            if (first) ExpirationStarted?.Invoke(Array.AsReadOnly(active));
+            foreach (var state in active)
+            {
+                var adapter = deployments.Single(d => d.Inventory == state).WeaponAdapter;
+                if (SettleDeath(state, adapter) == QusapLootResult.Success
+                    && Competition.TryGetOutcome(state.ParticipantId, out var outcome) && outcome == QusapRaidParticipantOutcome.Active)
+                    Competition.TryResolve(state.ParticipantId, QusapRaidParticipantOutcome.Eliminated);
+            }
+            Competition.EvaluateVictory();
+        }
         internal void StartLastSurvivorCompetition(IReadOnlyList<QusapRaidDeploymentAuthority> deployments)
         {
             lock (World.Gate)
@@ -38,6 +80,8 @@ namespace Qusap
                     return SettleExtractionCore(player.Inventory, player.WeaponAdapter, true) == QusapLootResult.Success;
                 }) || !authority.StartSession()) throw new InvalidOperationException("Shared roster could not be sealed");
                 Competition = authority;
+                this.deployments = deployments.ToArray();
+                Timing?.Start();
                 authority.SessionFinished += _ => FinishSession();
             }
         }
@@ -136,6 +180,7 @@ namespace Qusap
                     || registered != state || (weaponAdapter != null && !weaponAdapter.BelongsTo(World, state)))
                     return QusapLootResult.InvalidSource;
                 if (!state.CanOperate) return QusapLootResult.Blocked;
+                if (!winner && !CanExtract) return QusapLootResult.Blocked;
                 var equipped = weaponAdapter?.TrackEquipped();
                 var all = World.Find(QusapLootLocation.Backpack, state.ParticipantId)
                     .Concat(World.Find(QusapLootLocation.SecurePocket, state.ParticipantId))
@@ -203,13 +248,13 @@ namespace Qusap
             bool changed;
             lock (World.Gate)
             {
-                changed = !IsFinished; IsFinished = true;
+                changed = !IsFinished; IsFinished = true; Timing?.Stop();
                 changed |= World.DestroyRemainingDeathLoot() > 0;
                 World.DiscardLoaners();
             }
             if (changed && notify) World.Notify();
         }
         public void Dispose()
-        { FinishSession(false); foreach (var state in inventories.Values) state.Dispose(); DeathSettled = null; ExtractionSettled = null; }
+        { FinishSession(false); foreach (var state in inventories.Values) state.Dispose(); DeathSettled = null; ExtractionSettled = null; ExpirationStarted = null; }
     }
 }

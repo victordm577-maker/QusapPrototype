@@ -18,6 +18,8 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour, IQusapImp
     [SerializeField] GameObject visual;
     [SerializeField] Animator animator;
     [SerializeField] TextAsset approvedGrip;
+    [SerializeField] bool diagnosticRollShortcutsEnabled = true;
+    public bool DiagnosticRollShortcutsEnabled => diagnosticRollShortcutsEnabled;
     // H2 contains sparse local rotations, not Humanoid muscles. Keep the
     // approved clip intact; these serialized curves are copied from that asset.
     [Serializable] public sealed class HeadbuttRotation
@@ -451,6 +453,7 @@ public sealed class QusapDoubleLGroundAttackPresenter : MonoBehaviour, IQusapImp
     }
     void Update()
     {
+        if(!diagnosticRollShortcutsEnabled)return;
         // Retain the approved review's R / D-pad-up presentation shortcut and
         // scope it to the player's already configured device slot.
         bool pressed=input.LocalPlayerSlot==QusapLocalPlayerSlot.Player1Keyboard

@@ -148,6 +148,19 @@ namespace Qusap.Tests
             Assert.That(result.Outcome, Is.EqualTo(QusapParryAttemptOutcome.InvalidTimestampIgnored));
             Assert.That(machine.Phase, Is.EqualTo(QusapFinisherDefensePhase.ParryWindow));
         }
+        [Test] public void InWindowInputDeliveredAfterLaterPhysicsSampleStillParriesWithoutRewindingClock()
+        {
+            Arm(); machine.Advance(ArmedAt + .25d);
+            AssertSuccess(machine.TryParry(1, ArmedAt + .24d));
+            Assert.That(machine.Advance(ArmedAt + .245d).Changed, Is.False);
+            Assert.That(machine.Phase, Is.EqualTo(QusapFinisherDefensePhase.Parried));
+        }
+        [Test] public void BufferedInWindowInputCannotReopenAWindowThatAlreadyExpired()
+        {
+            Arm(); machine.Advance(machine.WindowClosesAt + .01d);
+            Assert.That(machine.TryParry(1, Midpoint()).Outcome, Is.EqualTo(QusapParryAttemptOutcome.InvalidTimestampIgnored));
+            Assert.That(machine.IsReadyToResolve, Is.True);
+        }
 
         [Test]
         public void NonFiniteTimestampIsHandledSafely()

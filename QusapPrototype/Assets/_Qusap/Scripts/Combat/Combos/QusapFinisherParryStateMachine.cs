@@ -73,7 +73,12 @@ namespace Qusap
             hasProcessedParryPress = true;
             lastProcessedParryPressId = pressId;
 
-            if (!TryAcceptTimestamp(timestamp))
+            // A queued device event may precede the newest physics sample while
+            // still belonging to the currently open window. Do not rewind the
+            // simulation clock, widen the window or reopen a terminal phase.
+            bool pendingInWindowEvent = Phase == QusapFinisherDefensePhase.ParryWindow
+                && timestamp >= WindowOpensAt && timestamp <= WindowClosesAt;
+            if (!TryAcceptTimestamp(timestamp) && !pendingInWindowEvent)
             {
                 return Result(QusapParryAttemptOutcome.InvalidTimestampIgnored);
             }

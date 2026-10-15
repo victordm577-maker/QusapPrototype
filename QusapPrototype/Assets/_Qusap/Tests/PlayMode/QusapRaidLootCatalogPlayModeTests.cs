@@ -40,9 +40,27 @@ namespace Qusap.Tests
             devices = new InputTestFixture(); devices.Setup(); InputSystem.AddDevice<Keyboard>(); InputSystem.AddDevice<Gamepad>();
             runtime = typeof(InputTestFixture).GetProperty("runtime", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(devices);
             runtime.GetType().GetProperty("advanceTimeEachDynamicUpdate").SetValue(runtime, 0d);
-            var load = EditorSceneManager.LoadSceneAsyncInPlayMode(ScenePath, new LoadSceneParameters(LoadSceneMode.Single)); while (!load.isDone) yield return null;
+            yield return LoadCatalogScene();
+        }
+        private static void SuppressScenePickups(Scene loaded, LoadSceneMode mode)
+        {
+            if (loaded.path != ScenePath) return;
+            foreach (var root in loaded.GetRootGameObjects())
+                foreach (var pickup in root.GetComponentsInChildren<QusapLootPickup>(true))
+                    pickup.GetComponent<Collider>().enabled = false;
+        }
+        private IEnumerator LoadCatalogScene(int physicsStepsBeforeContinuation = 0)
+        {
+            // sceneLoaded precedes Start and physics. Suppressing after the async wait can be too late.
+            SceneManager.sceneLoaded += SuppressScenePickups;
+            try
+            {
+                var load = EditorSceneManager.LoadSceneAsyncInPlayMode(ScenePath, new LoadSceneParameters(LoadSceneMode.Single));
+                while (!load.isDone) yield return null;
+                for (int i = 0; i < physicsStepsBeforeContinuation; i++) yield return new WaitForFixedUpdate();
+            }
+            finally { SceneManager.sceneLoaded -= SuppressScenePickups; }
             new GameObject("RaidLoot_TestClock").AddComponent<QusapVitalityTestClock>().Synchronize = Clock;
-            foreach (var pickup in UnityEngine.Object.FindObjectsByType<QusapLootPickup>()) pickup.GetComponent<Collider>().enabled = false;
             yield return Tick(.3f);
             playground = UnityEngine.Object.FindAnyObjectByType<QusapRaidLootCatalogPlayground>(); raid = playground.Raid; p1 = raid.Participants[0];
             repository = raid.GetComponent<QusapLocalProfilePersistence>().Repository;
@@ -64,6 +82,23 @@ namespace Qusap.Tests
             var native = definition.Category == QusapLootCategory.Weapon ? UnityEngine.Object.FindAnyObjectByType<QusapWeaponMatchBootstrap>().CreateRaidLootWeapon(definition.WeaponDefinitionId) : null;
             var item = raid.Session.World.Create(definition, "isolated play provenance", native, quantity);
             Assert.That(p1.State.TryPickup(item.LootInstanceId), Is.EqualTo(QusapLootResult.Success)); return item;
+        }
+        [UnityTest] public IEnumerator DelayedSceneLoadContinuationCannotAutoFillBackpackBeforeTestSetup()
+        {
+            // Exercise the old race deterministically, with real physics and the scene's normal spawn.
+            yield return LoadCatalogScene(4);
+            var snapshot = p1.ReadInventorySnapshot();
+            Assert.That(p1.State.Capacity, Is.EqualTo(6));
+            Assert.That(snapshot.Backpack.All(i => !i.HasValue), Is.True);
+            Assert.That(snapshot.SecurePocket.HasValue, Is.False);
+            Assert.That(snapshot.EquippedWeapon.Value.Weapon, Is.SameAs(p1.WeaponAdapter.CurrentWeapon));
+            var pickups = UnityEngine.Object.FindObjectsByType<QusapLootPickup>();
+            Assert.That(pickups.Length, Is.EqualTo(7));
+            Assert.That(pickups.All(p => !p.GetComponent<Collider>().enabled), Is.True);
+            Assert.That(pickups.All(p => p1.Session.World.Get(p.InstanceId).Location == QusapLootLocation.World), Is.True);
+            var material = Bag("raid_ancient_scale", 3);
+            Assert.That(material.Quantity, Is.EqualTo(3));
+            Assert.That(p1.ReadInventorySnapshot().Backpack[0].Value.LootInstanceId, Is.EqualTo(material.LootInstanceId));
         }
         [UnityTest] public IEnumerator ValidatedSceneUsesOneCatalogAndIsolatedProfileWithoutBuildOrRootMotionChanges()
         {

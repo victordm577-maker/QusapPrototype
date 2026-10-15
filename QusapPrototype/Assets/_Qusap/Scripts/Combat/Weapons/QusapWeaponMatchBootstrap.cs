@@ -47,6 +47,11 @@ namespace Qusap
         private bool destroying;
         private QusapInputReader playerOneInput;
         private QusapInputReader playerTwoInput;
+        private System.Func<QusapWeaponEquipment, bool> pickupRequestFilter;
+
+        // Optional scene-local explicit interaction. Null keeps all existing scenes' pickup policy.
+        public void SetPickupRequestFilter(System.Func<QusapWeaponEquipment, bool> request)
+            => pickupRequestFilter = request;
 
         public bool IsInitialized => initialized;
         public ulong NextWeaponInstanceId => idGenerator.NextAvailableId;
@@ -446,8 +451,10 @@ namespace Qusap
             }
 
             pickupCandidates.Clear();
-            AddCandidatesForPlayer(playerOneEquipment, currentTimestamp);
-            AddCandidatesForPlayer(playerTwoEquipment, currentTimestamp);
+            if (pickupRequestFilter == null || pickupRequestFilter(playerOneEquipment))
+                AddCandidatesForPlayer(playerOneEquipment, currentTimestamp);
+            if (pickupRequestFilter == null || pickupRequestFilter(playerTwoEquipment))
+                AddCandidatesForPlayer(playerTwoEquipment, currentTimestamp);
             pickupCandidates.Sort(RuntimePickupCandidateComparer.Instance);
 
             int completed = 0;
